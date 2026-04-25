@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use tracing::{info, info_span};
 use winit::{
-    application::ApplicationHandler, event::WindowEvent, event_loop::EventLoop,
+    application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, event_loop::EventLoop,
     window::WindowAttributes,
 };
 
@@ -19,20 +20,36 @@ impl Application {
     }
 
     pub fn run() {
+        let s = info_span!("application");
+        let _ = s.enter();
+
+        info!("Initialized.");
+
         let mut app = Application::new();
         EventLoop::new().unwrap().run_app(&mut app).unwrap();
+
+        info!("Done.");
     }
 }
 
 impl ApplicationHandler for Application {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         if self.render_state.is_none() {
+            let s = info_span!("creating_render_state");
+            let _ = s.enter();
+
+            info!("Creating new window and render state...");
             let window = event_loop
-                .create_window(WindowAttributes::default().with_title("Building Blocks"))
+                .create_window(
+                    WindowAttributes::default()
+                        .with_title("Building Blocks")
+                        .with_inner_size(PhysicalSize::new(640, 640)),
+                )
                 .expect("Failed to create application window!");
             let window = Arc::new(window);
             let render_state = pollster::block_on(RenderState::new(window));
             self.render_state = Some(render_state);
+            info!("Success!")
         }
     }
 

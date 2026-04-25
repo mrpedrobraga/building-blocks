@@ -32,8 +32,12 @@ pub struct BlocksPipeline {
 impl RenderState {
     pub async fn new(window: Arc<Window>) -> Self {
         let instance = Instance::new(InstanceDescriptor::new_without_display_handle());
+        let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = instance
-            .request_adapter(&RequestAdapterOptions::default())
+            .request_adapter(&RequestAdapterOptions {
+                compatible_surface: Some(&surface),
+                ..Default::default()
+            })
             .await
             .unwrap();
         let (device, queue) = adapter
@@ -41,7 +45,7 @@ impl RenderState {
             .await
             .unwrap();
 
-        let target = RenderTarget::new(window.clone(), &device, &instance, &adapter);
+        let target = RenderTarget::new(window.inner_size(), surface, &device, &adapter);
         let pipeline = BlocksPipeline::new(&device, &target);
 
         RenderState {
@@ -107,15 +111,13 @@ impl RenderState {
 
 impl RenderTarget {
     pub fn new(
-        window: Arc<Window>,
+        size: PhysicalSize<u32>,
+        surface: Surface<'static>,
         device: &Device,
-        instance: &Instance,
         adapter: &Adapter,
     ) -> Self {
-        let surface = instance.create_surface(window.clone()).unwrap();
         let surface_capabilities = surface.get_capabilities(&adapter);
         let surface_format = surface_capabilities.formats[0];
-        let size = window.inner_size();
 
         let surface_config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -132,7 +134,7 @@ impl RenderTarget {
         RenderTarget {
             surface,
             surface_config,
-            surface_size: window.inner_size(),
+            surface_size: size,
         }
     }
 
