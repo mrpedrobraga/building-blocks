@@ -1,0 +1,15 @@
+# Building Blocks
+
+Experimental "block" game engine.
+
+## Features
+
+### Volumetric
+
+The "world" is composed of several block clusters, inspired by [Sable sub-levels](https://modrinth.com/mod/sable). Clusters can be constructed, edited, serialized and deserialized at run time.
+
+Clusters of blocks can be queried for visuals or collision-simulated all at once in a world. The physics calculations are done with [Rapier](https://crates.io/crates/rapier3d), and the special "block-to-block" interactions are inspired by [Create](https://modrinth.com/mod/create) and its addon [Create: Simulated/Aeronautics](https://modrinth.com/mod/create-aeronautics);
+
+### Data-driven
+
+Blocks and their textures, sounds, behaviours are data-driven and scriptable.
