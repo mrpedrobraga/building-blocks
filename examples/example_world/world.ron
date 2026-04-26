@@ -1,0 +1,4 @@
+WorldDefinition {
+    id: "example_world",
+    display_name: "Example World"
+}

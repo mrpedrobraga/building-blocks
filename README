@@ -13,3 +13,34 @@ Clusters of blocks can be queried for visuals or collision-simulated all at once
 ### Data-driven
 
 Blocks and their textures, sounds, behaviours are data-driven and scriptable.
+
+## Roadmap & Inspirations
+
+### From Sable
+
+- [x] Several block clusters (like sub-levels);
+- [ ] Per-cluster physics (using Rapier);
+    - [ ] Cluster-to-cluster joints;
+
+### From Voxy
+
+- [ ] Really good LODs for large worlds;
+    - [ ] Static LOD clusters that are always low-detail for things in the distance you do never visit;
+    - [ ] LOD clusters that can be easily reified when zoomed in;
+
+### From Immersive Portals / Portal Mod
+
+- [ ] Portals;
+
+### From Axiom & Cozy Building Games
+
+- [ ] Block brushes;
+- [ ] Context aware tools (extrude connected blocks like walls, furniture, carpets, etc, with gizmos);
+
+### Other
+
+- [ ] Fully data driven blocks;
+    - [ ] Complex procedural materials;
+    - [ ] Complex (non-cuboid) models;
+    - [ ] Collisions and physics properties either per block or per box in case of non cuboid models;
+- [ ] Particles;
