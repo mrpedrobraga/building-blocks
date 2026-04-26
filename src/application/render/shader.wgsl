@@ -3,15 +3,16 @@ struct BlockDefinition {
 };
 
 struct RenderMaterial {
-    color: vec3<f32>,
+    color: vec4<f32>,
 };
 
 struct GlobalUniforms {
     view_proj: mat4x4<f32>,
     cluster_transform: mat4x4<f32>,
-    cluster_size: vec3<u32>,
+    cluster_size: vec4<u32>,
 };
 
+// TODO: Separate global and per cluster uniforms!
 @group(0) @binding(0) var<uniform> globals: GlobalUniforms;
 @group(0) @binding(1) var<storage, read> palette: array<BlockDefinition>;
 @group(0) @binding(2) var<storage, read> cluster_voxels: array<u32>;
@@ -41,12 +42,12 @@ fn vs_main(
     @builtin(vertex_index) v_idx: u32,
     @builtin(instance_index) i_idx: u32
 ) -> VertexOutput {
-    let block_id = cluster_voxels[i_idx];
-    
+    let raw_block_id = cluster_voxels[i_idx];
     // If `block_id` is 0, the block is empty and we discard it render-wise by collapsing the vertices;
-    if (block_id == 0u) {
+    if (raw_block_id == 0u) {
         return VertexOutput(vec4<f32>(0.0), vec4<f32>(0.0));
     }
+    let block_id = raw_block_id - 1;
 
     // Construct the cube model!
     let size = globals.cluster_size.xyz;
@@ -63,7 +64,7 @@ fn vs_main(
     
     var out: VertexOutput;
     out.clip_position = globals.view_proj * world_pos;
-    out.color = vec4(palette[block_id].material.color, 1.0);
+    out.color = palette[block_id].material.color;
     return out;
 }
 

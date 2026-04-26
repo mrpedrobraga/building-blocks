@@ -4,6 +4,8 @@
 
 use std::sync::Arc;
 
+use glam::{Mat4, UVec4};
+use tracing::info_span;
 use wgpu::{
     include_wgsl, util::DeviceExt, Adapter, BindGroupLayout, BindGroupLayoutEntry, Device,
     Instance, InstanceDescriptor, PipelineLayoutDescriptor, PrimitiveState, Queue,
@@ -16,7 +18,7 @@ use crate::{
     block::{
         BlockCluster, BlockClusterGpuUniforms, BlockClusterRenderResources, RenderMaterialGpu,
     },
-    universe::Universe,
+    universe::{Universe, UniverseGpu, World},
 };
 
 pub struct RenderState {
@@ -37,6 +39,25 @@ pub struct RenderTarget {
 pub struct BlocksPipeline {
     render_pipeline: RenderPipeline,
     cluster_bind_group_layout: BindGroupLayout,
+}
+
+pub fn create_projection_matrix(width: u32, height: u32) -> Mat4 {
+    let aspect_ratio = width as f32 / height as f32;
+    let fov_y = 45.0_f32.to_radians(); // Field of View
+    let z_near = 0.1; // Closest render distance
+    let z_far = 100.0; // Furthest render distance
+
+    // wgpu uses a depth range of [0, 1].
+    // Mat4::perspective_lh is for Left-Handed coordinates (common in voxel engines)
+    // There is also Mat4::perspective_rh if you prefer Right-Handed.
+    let perspective = Mat4::perspective_lh(fov_y, aspect_ratio, z_near, z_far);
+    let view = glam::Mat4::look_at_lh(
+        glam::Vec3::new(5.0, 5.0, 5.0), // Camera position
+        glam::Vec3::ZERO,               // Looking at center
+        glam::Vec3::Y,                  // Up direction
+    );
+
+    perspective * view
 }
 
 impl RenderState {
@@ -92,8 +113,22 @@ impl RenderState {
         cluster: &BlockCluster,
         universe_buffers: &wgpu::Buffer,
         pipeline: &BlocksPipeline,
-        _view_proj: glam::Mat4,
-    ) -> BlockClusterRenderResources {
+        view_proj: glam::Mat4,
+    ) -> (BlockClusterGpuUniforms, BlockClusterRenderResources) {
+        // CLUSTER UNIFORM BUFFER
+        let uniforms = BlockClusterGpuUniforms {
+            view_projection: view_proj.to_cols_array(),
+            transform: Mat4::from(cluster.transform).to_cols_array(),
+            size: UVec4::new(cluster.size.x, cluster.size.y, cluster.size.z, 0),
+        };
+        let uniform_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Cluster Uniform Buffer"),
+                contents: bytemuck::cast_slice(&[uniforms]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
         // VOXEL STORAGE
         // Buffer with the Block Definition indices for each block of the cluster.
         // Note that '0' is empty.
@@ -105,19 +140,6 @@ impl RenderState {
                 label: Some("Cluster Voxel Buffer"),
                 contents: bytemuck::cast_slice(&block_def_indices),
                 usage: wgpu::BufferUsages::STORAGE,
-            });
-
-        // CLUSTER UNIFORM BUFFER
-        let uniforms = BlockClusterGpuUniforms {
-            transform: cluster.transform,
-            size: cluster.size,
-        };
-        let uniform_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Cluster Uniform Buffer"),
-                contents: bytemuck::cast_slice(&[uniforms]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
         // BIND GROUP
@@ -140,15 +162,52 @@ impl RenderState {
             ],
         });
 
-        BlockClusterRenderResources {
-            block_buffer,
-            uniform_buffer,
-            bind_group,
-            num_voxels: cluster.size.x * cluster.size.y * cluster.size.z,
+        (
+            uniforms,
+            BlockClusterRenderResources {
+                block_buffer,
+                uniform_buffer,
+                bind_group,
+                num_voxels: cluster.size.x * cluster.size.y * cluster.size.z,
+            },
+        )
+    }
+
+    pub fn prepare(&mut self, universe: &mut Universe, world: &mut World) {
+        if universe.gpu.is_none() {
+            universe.gpu = Some(UniverseGpu {
+                block_definitions_buffer: Self::create_universe_buffers(&self, universe),
+            })
+        }
+
+        let view_proj = create_projection_matrix(
+            self.target.surface_config.width,
+            self.target.surface_config.height,
+        );
+
+        for (_, block_cluster) in world.block_clusters.iter_mut() {
+            if block_cluster.gpu.is_none() {
+                block_cluster.gpu = Some(Self::create_cluster_resources(
+                    &self,
+                    block_cluster,
+                    universe
+                        .gpu
+                        .as_ref()
+                        .map(|x| &x.block_definitions_buffer)
+                        .unwrap(),
+                    &self.pipeline,
+                    // TODO: Move this out of here into a different set of uniforms
+                    // that is global and not per-cluster!
+                    view_proj,
+                ));
+            }
         }
     }
 
-    pub fn render(&mut self, prepared_clusters: &[BlockClusterRenderResources]) {
+    pub fn render(&mut self, world: &World) {
+        let s = info_span!("render");
+        let _ = s.enter();
+
         let output = self.target.surface.get_current_texture();
         let wgpu::CurrentSurfaceTexture::Success(output) = output else {
             return;
@@ -195,10 +254,11 @@ impl RenderState {
             });
 
             render_pass.set_pipeline(&self.pipeline.render_pipeline);
-
-            for cluster in prepared_clusters {
-                render_pass.set_bind_group(0, &cluster.bind_group, &[]);
-                render_pass.draw(0..36, 0..cluster.num_voxels);
+            for (_, cluster) in world.block_clusters.iter() {
+                if let Some((_, resources)) = &cluster.gpu {
+                    render_pass.set_bind_group(0, &resources.bind_group, &[]);
+                    render_pass.draw(0..36, 0..resources.num_voxels);
+                }
             }
         }
 

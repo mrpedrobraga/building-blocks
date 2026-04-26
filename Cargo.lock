@@ -165,6 +165,7 @@ dependencies = [
  "bytemuck",
  "generational-arena",
  "glam",
+ "indexmap",
  "pollster",
  "ron",
  "serde",
