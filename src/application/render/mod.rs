@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use glam::{Mat4, UVec4};
+use image::EncodableLayout;
 use tracing::info_span;
 use wgpu::{
     include_wgsl, util::DeviceExt, Adapter, BindGroupLayout, BindGroupLayoutEntry, Device,
@@ -46,7 +47,8 @@ pub struct RenderTarget {
 
 pub struct BlocksPipeline {
     render_pipeline: RenderPipeline,
-    cluster_bind_group_layout: BindGroupLayout,
+    universe_bind_group_layout: BindGroupLayout,
+    block_cluster_bind_group_layout: BindGroupLayout,
 }
 
 pub fn create_projection_matrix(width: u32, height: u32) -> Mat4 {
@@ -117,23 +119,87 @@ impl RenderState {
         self.update_uniforms();
     }
 
-    pub fn create_universe_buffers(&self, universe: &Universe) -> wgpu::Buffer {
+    pub fn create_universe_gpu_resources(
+        &self,
+        universe: &Universe,
+        pipeline: &BlocksPipeline,
+    ) -> UniverseGpu {
+        /* Block Palette */
         let mut block_definitions = Vec::new();
         for (_, (_, definition)) in universe.block_definitions.iter().enumerate() {
             block_definitions.push(RenderMaterialGpu {
-                color: definition.material.x_min.color,
+                atlas_position: definition.material.x_min.atlas_position,
+                atlas_size: definition.material.x_min.atlas_size,
             });
         }
 
-        self.device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Universe Storage Buffer"),
-                contents: bytemuck::cast_slice(&block_definitions),
-                usage: wgpu::BufferUsages::STORAGE,
-            })
+        let block_definitions_buffer =
+            self.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Universe Storage Buffer"),
+                    contents: bytemuck::cast_slice(&block_definitions),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+
+        /* Atlas Image */
+        // TODO: Use automatic packing instead of manually authored atlases?
+        let image = image::load_from_memory(include_bytes!("debug_atlas.png"))
+            .unwrap()
+            .to_rgba8();
+        let material_texture_atlas = self.device.create_texture_with_data(
+            &self.queue,
+            &wgpu::TextureDescriptor {
+                label: Some("Universe Material Atlas"),
+                size: wgpu::Extent3d {
+                    width: image.width(),
+                    height: image.height(),
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
+            },
+            wgpu::wgt::TextureDataOrder::LayerMajor,
+            image.as_bytes(),
+        );
+        let atlas_view =
+            material_texture_atlas.create_view(&wgpu::TextureViewDescriptor::default());
+        let atlas_sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
+
+        // BIND GROUP
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Universe Bind Group"),
+            layout: &pipeline.universe_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&atlas_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&atlas_sampler),
+                },
+            ],
+        });
+
+        UniverseGpu {
+            block_definitions_buffer,
+            material_texture_atlas,
+            bind_group,
+        }
     }
 
-    pub fn create_cluster_resources(
+    pub fn create_block_cluster_gpu_resources(
         &self,
         cluster: &BlockCluster,
         universe_buffers: &wgpu::Buffer,
@@ -168,7 +234,7 @@ impl RenderState {
         // BIND GROUP
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Cluster Bind Group"),
-            layout: &pipeline.cluster_bind_group_layout,
+            layout: &pipeline.block_cluster_bind_group_layout,
             entries: &[
                 // TODO: Maybe move this to another bind group, so we bind it once per World?
                 wgpu::BindGroupEntry {
@@ -221,14 +287,16 @@ impl RenderState {
         self.update_uniforms();
 
         if universe.gpu.is_none() {
-            universe.gpu = Some(UniverseGpu {
-                block_definitions_buffer: Self::create_universe_buffers(&self, universe),
-            })
+            universe.gpu = Some(Self::create_universe_gpu_resources(
+                &self,
+                universe,
+                &self.pipeline,
+            ))
         }
 
         for (_, block_cluster) in world.block_clusters.iter_mut() {
             if block_cluster.gpu.is_none() {
-                block_cluster.gpu = Some(Self::create_cluster_resources(
+                block_cluster.gpu = Some(Self::create_block_cluster_gpu_resources(
                     &self,
                     block_cluster,
                     universe
@@ -244,7 +312,7 @@ impl RenderState {
         }
     }
 
-    pub fn render(&mut self, world: &World) {
+    pub fn render(&mut self, universe: &Universe, world: &World) {
         let s = info_span!("render");
         let _ = s.enter();
 
@@ -294,10 +362,15 @@ impl RenderState {
             });
 
             render_pass.set_pipeline(&self.pipeline.render_pipeline);
-            for (_, cluster) in world.block_clusters.iter() {
-                if let Some((_, resources)) = &cluster.gpu {
-                    render_pass.set_bind_group(0, &resources.bind_group, &[]);
-                    render_pass.draw(0..36, 0..resources.num_voxels);
+
+            if let Some(universe_gpu) = &universe.gpu {
+                render_pass.set_bind_group(1, &universe_gpu.bind_group, &[]);
+
+                for (_, cluster) in world.block_clusters.iter() {
+                    if let Some((_, resources)) = &cluster.gpu {
+                        render_pass.set_bind_group(0, &resources.bind_group, &[]);
+                        render_pass.draw(0..36, 0..resources.num_voxels);
+                    }
                 }
             }
         }
@@ -375,7 +448,7 @@ impl BlocksPipeline {
     pub fn new(device: &Device, target: &RenderTarget) -> Self {
         let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
 
-        let cluster_bind_group_layout =
+        let block_cluster_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Block Bind Group Layout"),
                 entries: &[
@@ -426,9 +499,35 @@ impl BlocksPipeline {
                 ],
             });
 
+        let universe_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Universe Bind Group Layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
         let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout Descriptor"),
-            bind_group_layouts: &[Some(&cluster_bind_group_layout)],
+            bind_group_layouts: &[
+                Some(&block_cluster_bind_group_layout),
+                Some(&universe_bind_group_layout),
+            ],
             immediate_size: 0,
         });
 
@@ -478,7 +577,8 @@ impl BlocksPipeline {
 
         BlocksPipeline {
             render_pipeline,
-            cluster_bind_group_layout,
+            universe_bind_group_layout,
+            block_cluster_bind_group_layout,
         }
     }
 }

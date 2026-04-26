@@ -3,7 +3,8 @@ struct BlockDefinition {
 };
 
 struct RenderMaterial {
-    color: vec4<f32>,
+    atlas_position: vec2<f32>,
+    atlas_size: vec2<f32>,
 };
 
 struct GlobalUniforms {
@@ -19,6 +20,9 @@ struct BlockClusterUniforms {
 @group(0) @binding(1) var<uniform> cluster_uniforms: BlockClusterUniforms; 
 @group(0) @binding(2) var<storage, read> block_definitions: array<BlockDefinition>;
 @group(0) @binding(3) var<storage, read> cluster_voxels: array<u32>;
+
+@group(1) @binding(0) var material_atlas: texture_2d<f32>;
+@group(1) @binding(1) var material_atlas_s: sampler;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -101,6 +105,9 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    var col = block_definitions[in.block_id].material.color;
+    let material = block_definitions[in.block_id].material;
+    let atlas_pixel_size = vec2<f32>(textureDimensions(material_atlas));
+    let atlas_uv = mix(material.atlas_position, material.atlas_position + material.atlas_size, in.uv) / atlas_pixel_size;
+    let col = textureSample(material_atlas, material_atlas_s, atlas_uv);
     return col * in.light_factor;
 }

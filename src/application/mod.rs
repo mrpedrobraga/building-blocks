@@ -93,7 +93,7 @@ impl ApplicationHandler for Application {
     ) {
         let Some(ApplicationState {
             render_state,
-            universe: _,
+            universe,
             world,
         }) = &mut self.state
         else {
@@ -107,7 +107,7 @@ impl ApplicationHandler for Application {
             WindowEvent::Resized(physical_size) => {
                 render_state.resize(physical_size);
             }
-            WindowEvent::RedrawRequested => render_state.render(&world),
+            WindowEvent::RedrawRequested => render_state.render(&universe, &world),
             _ => {}
         }
     }

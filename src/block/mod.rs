@@ -1,4 +1,4 @@
-use glam::{Affine3A, UVec3, UVec4, Vec4};
+use glam::{Affine3A, UVec3, UVec4, Vec2};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -35,13 +35,15 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderMaterial {
-    pub color: Vec4,
+    pub atlas_position: Vec2,
+    pub atlas_size: Vec2,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct RenderMaterialGpu {
-    pub color: Vec4,
+    pub atlas_position: Vec2,
+    pub atlas_size: Vec2,
 }
 
 pub type BlockId = u32;

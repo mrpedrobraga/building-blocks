@@ -4,7 +4,7 @@
 //! definitions — all the existing blocks and items, systems, etc.
 
 use generational_arena::Arena;
-use glam::{Affine3A, UVec3, Vec3, Vec4};
+use glam::{Affine3A, UVec3, Vec2, Vec3};
 use indexmap::IndexMap;
 
 use crate::{
@@ -20,6 +20,8 @@ pub struct Universe {
 
 pub struct UniverseGpu {
     pub block_definitions_buffer: wgpu::Buffer,
+    pub material_texture_atlas: wgpu::Texture,
+    pub bind_group: wgpu::BindGroup,
 }
 
 /// A World contains blocks, clusters and entities.
@@ -32,21 +34,23 @@ impl Universe {
         let mut block_definitions: IndexMap<Id, BlockDefinition> = IndexMap::new();
 
         block_definitions.insert(
-            "cyan".to_string(),
+            "dirt".to_string(),
             BlockDefinition {
-                display_name: "Cyan Block".to_string(),
+                display_name: "Dirt".to_string(),
                 material: PerFace::homogeneous(RenderMaterial {
-                    color: Vec4::new(1.0, 0.2, 0.7, 1.0),
+                    atlas_position: Vec2::new(0.0, 0.0),
+                    atlas_size: Vec2::new(8.0, 8.0),
                 }),
             },
         );
 
         block_definitions.insert(
-            "Yellow".to_string(),
+            "grassy_dirt".to_string(),
             BlockDefinition {
-                display_name: "Yellow Block".to_string(),
+                display_name: "Grassy Dirt".to_string(),
                 material: PerFace::homogeneous(RenderMaterial {
-                    color: Vec4::new(0.2, 0.6, 0.1, 1.0),
+                    atlas_position: Vec2::new(8.0, 0.0),
+                    atlas_size: Vec2::new(8.0, 8.0),
                 }),
             },
         );
@@ -66,12 +70,12 @@ impl World {
             size: UVec3::new(2, 2, 2),
             blocks: vec![
                 Block { id: 1 },
+                Block { id: 1 },
                 Block { id: 2 },
                 Block { id: 2 },
                 Block { id: 1 },
+                Block { id: 1 },
                 Block { id: 2 },
-                Block { id: 1 },
-                Block { id: 1 },
                 Block { id: 2 },
             ],
             gpu: None,
