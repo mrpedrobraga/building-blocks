@@ -53,7 +53,7 @@ pub struct BlocksPipeline {
 
 pub fn create_projection_matrix(width: u32, height: u32) -> Mat4 {
     let aspect_ratio = width as f32 / height as f32;
-    let fov_y = 45.0_f32.to_radians(); // Field of View
+    let fov_y = 60.0_f32.to_radians(); // Field of View
     let z_near = 0.1; // Closest render distance
     let z_far = 100.0; // Furthest render distance
 
@@ -62,9 +62,9 @@ pub fn create_projection_matrix(width: u32, height: u32) -> Mat4 {
     // There is also Mat4::perspective_rh if you prefer Right-Handed.
     let perspective = Mat4::perspective_lh(fov_y, aspect_ratio, z_near, z_far);
     let view = glam::Mat4::look_at_lh(
-        glam::Vec3::new(5.0, 5.0, 5.0), // Camera position
-        glam::Vec3::ZERO,               // Looking at center
-        glam::Vec3::Y,                  // Up direction
+        glam::Vec3::new(10.0, 10.0, 10.0), // Camera position
+        glam::Vec3::ZERO,                  // Looking at center
+        glam::Vec3::Y,                     // Up direction
     );
 
     perspective * view

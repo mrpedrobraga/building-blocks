@@ -26,7 +26,7 @@ struct BlockClusterUniforms {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
+    @location(0) @interpolate(perspective) uv: vec2<f32>,
     @location(1) block_id: u32,
     @location(2) light_factor: f32,
 };
@@ -67,7 +67,7 @@ const UV_DATA = array<vec2<f32>, 6>(
 );
 
 const FACE_LIGHTING = array<f32, 6>(
-    0.8, 0.8, 0.5, 1.0, 0.7, 0.7
+    0.5, 0.8, 0.8, 0.7, 0.7, 1.0
 );
 
 @vertex
@@ -109,5 +109,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let atlas_pixel_size = vec2<f32>(textureDimensions(material_atlas));
     let atlas_uv = mix(material.atlas_position, material.atlas_position + material.atlas_size, in.uv) / atlas_pixel_size;
     let col = textureSample(material_atlas, material_atlas_s, atlas_uv);
-    return col * in.light_factor;
+    return vec4(in.uv, 0.0, 1.0);
+    //return col * in.light_factor;
 }
