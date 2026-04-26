@@ -79,9 +79,6 @@ impl Clone for BlockCluster {
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct BlockClusterGpuUniforms {
-    // TODO: Move this out of cluster uniforms and into
-    // a camera uniform :-)
-    pub view_projection: [f32; 16],
     pub transform: [f32; 16],
     pub size: UVec4,
 }

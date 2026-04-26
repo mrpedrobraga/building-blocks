@@ -8,33 +8,62 @@ struct RenderMaterial {
 
 struct GlobalUniforms {
     view_proj: mat4x4<f32>,
-    cluster_transform: mat4x4<f32>,
-    cluster_size: vec4<u32>,
 };
 
-// TODO: Separate global and per cluster uniforms!
+struct BlockClusterUniforms {
+    transform: mat4x4<f32>,
+    size: vec4<u32>,
+}
+
 @group(0) @binding(0) var<uniform> globals: GlobalUniforms;
-@group(0) @binding(1) var<storage, read> palette: array<BlockDefinition>;
-@group(0) @binding(2) var<storage, read> cluster_voxels: array<u32>;
+@group(0) @binding(1) var<uniform> cluster_uniforms: BlockClusterUniforms; 
+@group(0) @binding(2) var<storage, read> block_definitions: array<BlockDefinition>;
+@group(0) @binding(3) var<storage, read> cluster_voxels: array<u32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) color: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+    @location(1) block_id: u32,
+    @location(2) light_factor: f32,
 };
 
-// Hardcoded cube offsets for 36 vertices (6 faces * 2 triangles * 3 vertices)
 const POSITIONS = array<vec3<f32>, 8>(
     vec3<f32>(0,0,0), vec3<f32>(1,0,0), vec3<f32>(1,1,0), vec3<f32>(0,1,0),
     vec3<f32>(0,0,1), vec3<f32>(1,0,1), vec3<f32>(1,1,1), vec3<f32>(0,1,1)
 );
 
 const INDICES = array<u32, 36>(
-    0u, 2u, 1u, 0u, 3u, 2u, // Front
-    4u, 5u, 6u, 4u, 6u, 7u, // Back
-    0u, 1u, 5u, 0u, 5u, 4u, // Bottom
-    2u, 3u, 7u, 2u, 7u, 6u, // Top
-    0u, 4u, 7u, 0u, 7u, 3u, // Left
-    1u, 2u, 6u, 1u, 6u, 5u  // Right
+    // Front Face (-Z): Outward normal is -Z
+    0u, 1u, 2u,  0u, 2u, 3u,
+    
+    // Back Face (+Z): Outward normal is +Z
+    5u, 4u, 7u,  5u, 7u, 6u,
+    
+    // Left Face (-X): Outward normal is -X
+    4u, 0u, 3u,  4u, 3u, 7u,
+    
+    // Right Face (+X): Outward normal is +X
+    1u, 5u, 6u,  1u, 6u, 2u,
+    
+    // Bottom Face (-Y): Outward normal is -Y
+    1u, 0u, 4u,  1u, 4u, 5u,
+    
+    // Top Face (+Y): Outward normal is +Y
+    3u, 2u, 6u,  3u, 6u, 7u
+);
+
+const UV_DATA = array<vec2<f32>, 6>(
+    vec2<f32>(0.0, 1.0), // 0: Bottom-Left
+    vec2<f32>(1.0, 1.0), // 1: Bottom-Right
+    vec2<f32>(1.0, 0.0), // 2: Top-Right
+    
+    vec2<f32>(0.0, 1.0), // 0: Bottom-Left
+    vec2<f32>(1.0, 0.0), // 2: Top-Right
+    vec2<f32>(0.0, 0.0)  // 3: Top-Left
+);
+
+const FACE_LIGHTING = array<f32, 6>(
+    0.8, 0.8, 0.5, 1.0, 0.7, 0.7
 );
 
 @vertex
@@ -43,14 +72,12 @@ fn vs_main(
     @builtin(instance_index) i_idx: u32
 ) -> VertexOutput {
     let raw_block_id = cluster_voxels[i_idx];
-    // If `block_id` is 0, the block is empty and we discard it render-wise by collapsing the vertices;
     if (raw_block_id == 0u) {
-        return VertexOutput(vec4<f32>(0.0), vec4<f32>(0.0));
+        return VertexOutput(vec4<f32>(0.0), vec2<f32>(0.0), 0, 0.0);
     }
     let block_id = raw_block_id - 1;
 
-    // Construct the cube model!
-    let size = globals.cluster_size.xyz;
+    let size = cluster_uniforms.size.xyz;
     let x = i_idx % size.x;
     let y = (i_idx / size.x) % size.y;
     let z = i_idx / (size.x * size.y);
@@ -59,16 +86,21 @@ fn vs_main(
     let corner_idx = INDICES[v_idx];
     let local_pos = POSITIONS[corner_idx];
     
-    // Transform: Local -> Cluster -> World -> Camera
-    let world_pos = globals.cluster_transform * vec4<f32>(grid_pos + local_pos, 1.0);
+    let face_idx = v_idx / 6u;
+    let uv_idx = v_idx % 6u; // Which vertex of the face are we on?
+    
+    let world_pos = cluster_uniforms.transform * vec4<f32>(grid_pos + local_pos, 1.0);
     
     var out: VertexOutput;
     out.clip_position = globals.view_proj * world_pos;
-    out.color = palette[block_id].material.color;
+    out.uv = UV_DATA[uv_idx];
+    out.block_id = block_id;
+    out.light_factor = FACE_LIGHTING[face_idx];
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return in.color;
+    var col = block_definitions[in.block_id].material.color;
+    return col * in.light_factor;
 }

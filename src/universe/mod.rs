@@ -36,17 +36,17 @@ impl Universe {
             BlockDefinition {
                 display_name: "Cyan Block".to_string(),
                 material: PerFace::homogeneous(RenderMaterial {
-                    color: Vec4::new(0.0, 1.0, 1.0, 1.0),
+                    color: Vec4::new(1.0, 0.2, 0.7, 1.0),
                 }),
             },
         );
 
         block_definitions.insert(
-            "red".to_string(),
+            "Yellow".to_string(),
             BlockDefinition {
-                display_name: "Red Block".to_string(),
+                display_name: "Yellow Block".to_string(),
                 material: PerFace::homogeneous(RenderMaterial {
-                    color: Vec4::new(1.0, 0.0, 0.0, 1.0),
+                    color: Vec4::new(0.2, 0.6, 0.1, 1.0),
                 }),
             },
         );
@@ -63,8 +63,17 @@ impl World {
         let example_block_cluster = BlockCluster {
             transform: Affine3A::from_translation(Vec3::new(0.0, 0.0, 0.0)),
             physics_mode: crate::block::PhysicsMode::Dynamic,
-            size: UVec3::new(2, 1, 1),
-            blocks: vec![Block { id: 1 }, Block { id: 2 }],
+            size: UVec3::new(2, 2, 2),
+            blocks: vec![
+                Block { id: 1 },
+                Block { id: 2 },
+                Block { id: 2 },
+                Block { id: 1 },
+                Block { id: 2 },
+                Block { id: 1 },
+                Block { id: 1 },
+                Block { id: 2 },
+            ],
             gpu: None,
         };
 

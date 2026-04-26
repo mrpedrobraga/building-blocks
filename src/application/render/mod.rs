@@ -27,6 +27,14 @@ pub struct RenderState {
     target: RenderTarget,
     pipeline: BlocksPipeline,
     pub window: Arc<Window>,
+    uniforms: GlobalUniforms,
+    global_uniform_buffer: wgpu::Buffer,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GlobalUniforms {
+    pub view_projection: [f32; 16],
 }
 
 pub struct RenderTarget {
@@ -79,17 +87,34 @@ impl RenderState {
         let target = RenderTarget::new(window.inner_size(), surface, &device, &adapter);
         let pipeline = BlocksPipeline::new(&device, &target);
 
+        let uniforms = GlobalUniforms {
+            view_projection: create_projection_matrix(
+                target.surface_config.width,
+                target.surface_config.height,
+            )
+            .to_cols_array(),
+        };
+
+        let global_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Cluster Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         RenderState {
             device,
             queue,
             pipeline,
             target,
             window,
+            uniforms,
+            global_uniform_buffer,
         }
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.target.configure(&self.device, new_size);
+        self.update_uniforms();
     }
 
     pub fn create_universe_buffers(&self, universe: &Universe) -> wgpu::Buffer {
@@ -113,11 +138,9 @@ impl RenderState {
         cluster: &BlockCluster,
         universe_buffers: &wgpu::Buffer,
         pipeline: &BlocksPipeline,
-        view_proj: glam::Mat4,
     ) -> (BlockClusterGpuUniforms, BlockClusterRenderResources) {
         // CLUSTER UNIFORM BUFFER
         let uniforms = BlockClusterGpuUniforms {
-            view_projection: view_proj.to_cols_array(),
             transform: Mat4::from(cluster.transform).to_cols_array(),
             size: UVec4::new(cluster.size.x, cluster.size.y, cluster.size.z, 0),
         };
@@ -147,16 +170,21 @@ impl RenderState {
             label: Some("Cluster Bind Group"),
             layout: &pipeline.cluster_bind_group_layout,
             entries: &[
+                // TODO: Maybe move this to another bind group, so we bind it once per World?
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
+                    resource: self.global_uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: universe_buffers.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
+                    resource: universe_buffers.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
                     resource: block_buffer.as_entire_binding(),
                 },
             ],
@@ -173,17 +201,30 @@ impl RenderState {
         )
     }
 
+    pub fn update_uniforms(&mut self) {
+        self.uniforms = GlobalUniforms {
+            view_projection: create_projection_matrix(
+                self.target.surface_config.width,
+                self.target.surface_config.height,
+            )
+            .to_cols_array(),
+        };
+
+        self.queue.write_buffer(
+            &self.global_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.uniforms]),
+        );
+    }
+
     pub fn prepare(&mut self, universe: &mut Universe, world: &mut World) {
+        self.update_uniforms();
+
         if universe.gpu.is_none() {
             universe.gpu = Some(UniverseGpu {
                 block_definitions_buffer: Self::create_universe_buffers(&self, universe),
             })
         }
-
-        let view_proj = create_projection_matrix(
-            self.target.surface_config.width,
-            self.target.surface_config.height,
-        );
 
         for (_, block_cluster) in world.block_clusters.iter_mut() {
             if block_cluster.gpu.is_none() {
@@ -198,7 +239,6 @@ impl RenderState {
                     &self.pipeline,
                     // TODO: Move this out of here into a different set of uniforms
                     // that is global and not per-cluster!
-                    view_proj,
                 ));
             }
         }
@@ -327,6 +367,7 @@ impl RenderTarget {
         self.surface_config.width = new_size.width;
         self.surface_config.height = new_size.height;
         self.surface.configure(&device, &self.surface_config);
+        self.depth_texture_view = Self::create_depth_texture(device, &self.surface_config);
     }
 }
 
@@ -349,9 +390,20 @@ impl BlocksPipeline {
                         },
                         count: None,
                     },
-                    // Binding 1: Universe's Block Definition buffer.
+                    // Binding 1: Block cluster Uniforms!
                     BindGroupLayoutEntry {
                         binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Binding 2: Universe's Block Definition buffer.
+                    BindGroupLayoutEntry {
+                        binding: 2,
                         visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -360,9 +412,9 @@ impl BlocksPipeline {
                         },
                         count: None,
                     },
-                    // Binding 2: The current cluster's block data.
+                    // Binding 3: The current cluster's block data.
                     BindGroupLayoutEntry {
-                        binding: 2,
+                        binding: 3,
                         visibility: wgpu::ShaderStages::VERTEX,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Storage { read_only: true },
