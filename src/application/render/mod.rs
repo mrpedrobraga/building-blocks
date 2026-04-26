@@ -2,9 +2,9 @@
 //!
 //! Render engine that renders everything to the screen :-)
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use glam::{Mat4, UVec4};
+use glam::{Mat3, Mat4, UVec2, UVec4, Vec3, Vec4};
 use image::EncodableLayout;
 use tracing::info_span;
 use wgpu::{
@@ -36,6 +36,10 @@ pub struct RenderState {
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GlobalUniforms {
     pub view_projection: [f32; 16],
+    pub global_time: f32,
+    pub x2: f32,
+    pub x3: f32,
+    pub x4: f32,
 }
 
 pub struct RenderTarget {
@@ -51,27 +55,83 @@ pub struct BlocksPipeline {
     block_cluster_bind_group_layout: BindGroupLayout,
 }
 
-pub fn create_projection_matrix(width: u32, height: u32) -> Mat4 {
-    let aspect_ratio = width as f32 / height as f32;
-    let fov_y = 60.0_f32.to_radians();
-    let z_near = 0.1;
-    let z_far = 100.0;
+pub struct Camera {
+    pub transform: Mat4,
+    pub projection: CameraProjection,
+}
 
-    // wgpu depth is:
-    // 0 - right here
-    // 1 - infinitely far
-    let perspective = Mat4::perspective_lh(fov_y, aspect_ratio, z_near, z_far);
-    let view = glam::Mat4::look_at_lh(
-        glam::Vec3::new(10.0, 10.0, 10.0),
-        glam::Vec3::ZERO,
-        glam::Vec3::Y,
-    );
+pub enum CameraProjection {
+    Perspective {
+        vertical_fov_radians: f32,
+        z_near_clipping_plane: f32,
+        z_far_clipping_plane: f32,
+    },
+    Axonometric {
+        scale: f32,
+        basis: Mat3,
+        z_near_clipping_plane: f32,
+        z_far_clipping_plane: f32,
+    },
+}
 
-    perspective * view
+impl Camera {
+    pub fn look_at_world_matrix(eye: Vec3, target: Vec3, up: Vec3) -> Mat4 {
+        let z_axis = (target - eye).normalize();
+        let x_axis = up.cross(z_axis).normalize();
+        let y_axis = z_axis.cross(x_axis);
+
+        Mat4::from_cols(
+            x_axis.extend(0.0),
+            y_axis.extend(0.0),
+            z_axis.extend(0.0),
+            eye.extend(1.0),
+        )
+    }
+
+    pub fn projection_matrix(&self, screen_size: UVec2) -> Mat4 {
+        let aspect_ratio = screen_size.x as f32 / screen_size.y as f32;
+
+        match self.projection {
+            CameraProjection::Perspective {
+                vertical_fov_radians,
+                z_near_clipping_plane,
+                z_far_clipping_plane,
+            } => {
+                Mat4::perspective_lh(
+                    vertical_fov_radians,
+                    aspect_ratio,
+                    z_near_clipping_plane,
+                    z_far_clipping_plane,
+                ) * self.transform.inverse()
+            }
+            CameraProjection::Axonometric {
+                scale,
+                basis,
+                z_near_clipping_plane,
+                z_far_clipping_plane,
+            } => {
+                let zoom = 1.0 / scale;
+                let inv_aspect = 1.0 / aspect_ratio;
+
+                let z_range = z_far_clipping_plane - z_near_clipping_plane;
+
+                let basis_mat = Mat4::from_mat3(basis);
+
+                let reshape = Mat4::from_cols(
+                    Vec4::new(zoom * inv_aspect, 0.0, 0.0, 0.0),
+                    Vec4::new(0.0, zoom, 0.0, 0.0),
+                    Vec4::new(0.0, 0.0, 1.0 / z_range, 0.0),
+                    Vec4::new(0.0, 0.0, -z_near_clipping_plane / z_range, 1.0),
+                );
+
+                reshape * basis_mat * self.transform.inverse()
+            }
+        }
+    }
 }
 
 impl RenderState {
-    pub async fn new(window: Arc<Window>) -> Self {
+    pub async fn new(window: Arc<Window>, camera: &Camera) -> Self {
         let instance = Instance::new(InstanceDescriptor::new_without_display_handle());
         let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = instance
@@ -90,11 +150,16 @@ impl RenderState {
         let pipeline = BlocksPipeline::new(&device, &target);
 
         let uniforms = GlobalUniforms {
-            view_projection: create_projection_matrix(
-                target.surface_config.width,
-                target.surface_config.height,
-            )
-            .to_cols_array(),
+            view_projection: camera
+                .projection_matrix(UVec2::new(
+                    target.surface_config.width,
+                    target.surface_config.height,
+                ))
+                .to_cols_array(),
+            global_time: 0.0,
+            x2: 0.0,
+            x3: 0.0,
+            x4: 0.0,
         };
 
         let global_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -116,9 +181,137 @@ impl RenderState {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.target.configure(&self.device, new_size);
-        self.update_uniforms();
     }
 
+    pub fn update(&mut self, camera: &Camera, global_time: Duration) {
+        self.update_uniforms(camera, global_time);
+    }
+
+    pub fn update_uniforms(&mut self, camera: &Camera, global_time: Duration) {
+        self.uniforms = GlobalUniforms {
+            view_projection: camera
+                .projection_matrix(UVec2::new(
+                    self.target.surface_config.width,
+                    self.target.surface_config.height,
+                ))
+                .to_cols_array(),
+            global_time: global_time.as_secs_f32(),
+            x2: 0.0,
+            x3: 0.0,
+            x4: 0.0,
+        };
+
+        self.queue.write_buffer(
+            &self.global_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.uniforms]),
+        );
+    }
+
+    pub fn prepare(
+        &mut self,
+        universe: &mut Universe,
+        world: &mut World,
+        camera: &Camera,
+        global_time: Duration,
+    ) {
+        self.update(camera, global_time);
+
+        if universe.gpu.is_none() {
+            universe.gpu = Some(Self::create_universe_gpu_resources(
+                &self,
+                universe,
+                &self.pipeline,
+            ))
+        }
+
+        for (_, block_cluster) in world.block_clusters.iter_mut() {
+            if block_cluster.gpu.is_none() {
+                block_cluster.gpu = Some(Self::create_block_cluster_gpu_resources(
+                    &self,
+                    block_cluster,
+                    universe
+                        .gpu
+                        .as_ref()
+                        .map(|x| &x.block_definitions_buffer)
+                        .unwrap(),
+                    &self.pipeline,
+                    // TODO: Move this out of here into a different set of uniforms
+                    // that is global and not per-cluster!
+                ));
+            }
+        }
+    }
+
+    pub fn render(&mut self, universe: &Universe, world: &World) {
+        let s = info_span!("render");
+        let _ = s.enter();
+
+        let output = self.target.surface.get_current_texture();
+        let wgpu::CurrentSurfaceTexture::Success(output) = output else {
+            return;
+        };
+
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Main Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.9,
+                            g: 0.9,
+                            b: 0.9,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    view: &self.target.depth_texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            render_pass.set_pipeline(&self.pipeline.render_pipeline);
+
+            if let Some(universe_gpu) = &universe.gpu {
+                render_pass.set_bind_group(1, &universe_gpu.bind_group, &[]);
+
+                for (_, cluster) in world.block_clusters.iter() {
+                    if let Some((_, resources)) = &cluster.gpu {
+                        render_pass.set_bind_group(0, &resources.bind_group, &[]);
+                        render_pass.draw(0..36, 0..resources.num_voxels);
+                    }
+                }
+            }
+        }
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+    }
+}
+
+impl RenderState {
     pub fn create_universe_gpu_resources(
         &self,
         universe: &Universe,
@@ -266,118 +459,6 @@ impl RenderState {
             },
         )
     }
-
-    pub fn update_uniforms(&mut self) {
-        self.uniforms = GlobalUniforms {
-            view_projection: create_projection_matrix(
-                self.target.surface_config.width,
-                self.target.surface_config.height,
-            )
-            .to_cols_array(),
-        };
-
-        self.queue.write_buffer(
-            &self.global_uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[self.uniforms]),
-        );
-    }
-
-    pub fn prepare(&mut self, universe: &mut Universe, world: &mut World) {
-        self.update_uniforms();
-
-        if universe.gpu.is_none() {
-            universe.gpu = Some(Self::create_universe_gpu_resources(
-                &self,
-                universe,
-                &self.pipeline,
-            ))
-        }
-
-        for (_, block_cluster) in world.block_clusters.iter_mut() {
-            if block_cluster.gpu.is_none() {
-                block_cluster.gpu = Some(Self::create_block_cluster_gpu_resources(
-                    &self,
-                    block_cluster,
-                    universe
-                        .gpu
-                        .as_ref()
-                        .map(|x| &x.block_definitions_buffer)
-                        .unwrap(),
-                    &self.pipeline,
-                    // TODO: Move this out of here into a different set of uniforms
-                    // that is global and not per-cluster!
-                ));
-            }
-        }
-    }
-
-    pub fn render(&mut self, universe: &Universe, world: &World) {
-        let s = info_span!("render");
-        let _ = s.enter();
-
-        let output = self.target.surface.get_current_texture();
-        let wgpu::CurrentSurfaceTexture::Success(output) = output else {
-            return;
-        };
-
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Main Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.9,
-                            g: 0.9,
-                            b: 0.9,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: &self.target.depth_texture_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-
-            render_pass.set_pipeline(&self.pipeline.render_pipeline);
-
-            if let Some(universe_gpu) = &universe.gpu {
-                render_pass.set_bind_group(1, &universe_gpu.bind_group, &[]);
-
-                for (_, cluster) in world.block_clusters.iter() {
-                    if let Some((_, resources)) = &cluster.gpu {
-                        render_pass.set_bind_group(0, &resources.bind_group, &[]);
-                        render_pass.draw(0..36, 0..resources.num_voxels);
-                    }
-                }
-            }
-        }
-
-        self.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
-    }
 }
 
 impl RenderTarget {
@@ -453,9 +534,10 @@ impl BlocksPipeline {
                 label: Some("Block Bind Group Layout"),
                 entries: &[
                     // Binding 0: Global Uniforms!
+                    // TODO: Move this to a different bind group!
                     BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
