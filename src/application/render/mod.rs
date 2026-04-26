@@ -5,11 +5,19 @@
 use std::sync::Arc;
 
 use wgpu::{
-    include_wgsl, Adapter, Device, Instance, InstanceDescriptor, PipelineLayoutDescriptor,
-    PrimitiveState, Queue, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
-    Surface, SurfaceConfiguration, TextureUsages,
+    include_wgsl, util::DeviceExt, Adapter, BindGroupLayout, BindGroupLayoutEntry, Device,
+    Instance, InstanceDescriptor, PipelineLayoutDescriptor, PrimitiveState, Queue,
+    RenderPassDepthStencilAttachment, RenderPipeline, RenderPipelineDescriptor,
+    RequestAdapterOptions, Surface, SurfaceConfiguration, TextureUsages, TextureView,
 };
 use winit::{dpi::PhysicalSize, window::Window};
+
+use crate::{
+    block::{
+        BlockCluster, BlockClusterGpuUniforms, BlockClusterRenderResources, RenderMaterialGpu,
+    },
+    universe::Universe,
+};
 
 pub struct RenderState {
     device: Device,
@@ -21,12 +29,14 @@ pub struct RenderState {
 
 pub struct RenderTarget {
     surface: Surface<'static>,
+    depth_texture_view: TextureView,
     surface_config: SurfaceConfiguration,
     surface_size: PhysicalSize<u32>,
 }
 
 pub struct BlocksPipeline {
     render_pipeline: RenderPipeline,
+    cluster_bind_group_layout: BindGroupLayout,
 }
 
 impl RenderState {
@@ -61,7 +71,84 @@ impl RenderState {
         self.target.configure(&self.device, new_size);
     }
 
-    pub fn render(&mut self) {
+    pub fn create_universe_buffers(&self, universe: &Universe) -> wgpu::Buffer {
+        let mut block_definitions = Vec::new();
+        for (_, (_, definition)) in universe.block_definitions.iter().enumerate() {
+            block_definitions.push(RenderMaterialGpu {
+                color: definition.material.x_min.color,
+            });
+        }
+
+        self.device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Universe Storage Buffer"),
+                contents: bytemuck::cast_slice(&block_definitions),
+                usage: wgpu::BufferUsages::STORAGE,
+            })
+    }
+
+    pub fn create_cluster_resources(
+        &self,
+        cluster: &BlockCluster,
+        universe_buffers: &wgpu::Buffer,
+        pipeline: &BlocksPipeline,
+        _view_proj: glam::Mat4,
+    ) -> BlockClusterRenderResources {
+        // VOXEL STORAGE
+        // Buffer with the Block Definition indices for each block of the cluster.
+        // Note that '0' is empty.
+        let block_def_indices: Vec<u32> = cluster.blocks.iter().map(|block| block.id).collect();
+        let block_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                // TODO: Maybe ID of cluster goes here heheh...
+                label: Some("Cluster Voxel Buffer"),
+                contents: bytemuck::cast_slice(&block_def_indices),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+
+        // CLUSTER UNIFORM BUFFER
+        let uniforms = BlockClusterGpuUniforms {
+            transform: cluster.transform,
+            size: cluster.size,
+        };
+        let uniform_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Cluster Uniform Buffer"),
+                contents: bytemuck::cast_slice(&[uniforms]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        // BIND GROUP
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Cluster Bind Group"),
+            layout: &pipeline.cluster_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: universe_buffers.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: block_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        BlockClusterRenderResources {
+            block_buffer,
+            uniform_buffer,
+            bind_group,
+            num_voxels: cluster.size.x * cluster.size.y * cluster.size.z,
+        }
+    }
+
+    pub fn render(&mut self, prepared_clusters: &[BlockClusterRenderResources]) {
         let output = self.target.surface.get_current_texture();
         let wgpu::CurrentSurfaceTexture::Success(output) = output else {
             return;
@@ -94,14 +181,25 @@ impl RenderState {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    view: &self.target.depth_texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.pipeline.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+
+            for cluster in prepared_clusters {
+                render_pass.set_bind_group(0, &cluster.bind_group, &[]);
+                render_pass.draw(0..36, 0..cluster.num_voxels);
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -131,11 +229,37 @@ impl RenderTarget {
         };
         surface.configure(&device, &surface_config);
 
+        let depth_texture_view = Self::create_depth_texture(device, &surface_config);
+
         RenderTarget {
             surface,
+            depth_texture_view,
             surface_config,
             surface_size: size,
         }
+    }
+
+    pub fn create_depth_texture(
+        device: &wgpu::Device,
+        color_texture_config: &SurfaceConfiguration,
+    ) -> wgpu::TextureView {
+        let size = wgpu::Extent3d {
+            width: color_texture_config.width,
+            height: color_texture_config.height,
+            depth_or_array_layers: 1,
+        };
+        let descriptor = wgpu::TextureDescriptor {
+            label: Some("Render Target Depth"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        };
+        let texture = device.create_texture(&descriptor);
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
     pub fn configure(&mut self, device: &Device, new_size: PhysicalSize<u32>) {
@@ -149,11 +273,53 @@ impl RenderTarget {
 impl BlocksPipeline {
     pub fn new(device: &Device, target: &RenderTarget) -> Self {
         let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
+
+        let cluster_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Block Bind Group Layout"),
+                entries: &[
+                    // Binding 0: Global Uniforms!
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Binding 1: Universe's Block Definition buffer.
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Binding 2: The current cluster's block data.
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
         let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout Descriptor"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[Some(&cluster_bind_group_layout)],
             immediate_size: 0,
         });
+
         let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Main Render Pipeline"),
             layout: Some(&render_pipeline_layout),
@@ -172,14 +338,13 @@ impl BlocksPipeline {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: None,
-            /*depth_stencil: Some(wgpu::DepthStencilState {
+            depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
-            }),*/
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -199,6 +364,9 @@ impl BlocksPipeline {
             cache: None,
         });
 
-        BlocksPipeline { render_pipeline }
+        BlocksPipeline {
+            render_pipeline,
+            cluster_bind_group_layout,
+        }
     }
 }

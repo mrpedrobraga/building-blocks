@@ -71,7 +71,7 @@ impl ApplicationHandler for Application {
             WindowEvent::Resized(physical_size) => {
                 state.resize(physical_size);
             }
-            WindowEvent::RedrawRequested => state.render(),
+            WindowEvent::RedrawRequested => state.render(&[]),
             _ => {}
         }
     }
