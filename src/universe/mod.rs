@@ -67,7 +67,7 @@ impl World {
         let size = UVec3::new(3, 3, 3);
 
         const AIR: u32 = 0;
-        const DIRT: u32 = 1;
+        //const DIRT: u32 = 1;
         const WOOD: u32 = 2;
 
         let blocks = vec![

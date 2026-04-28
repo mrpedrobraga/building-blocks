@@ -39,8 +39,10 @@ Blocks and their textures, sounds, behaviours are data-driven and scriptable.
 
 ### Other
 
-- [ ] Fully data driven blocks;
+- [X] Fully data driven blocks;
     - [ ] Complex procedural materials;
     - [ ] Complex (non-cuboid) models;
     - [ ] Collisions and physics properties either per block or per box in case of non cuboid models;
 - [ ] Particles;
+
+### Experimental ideas
