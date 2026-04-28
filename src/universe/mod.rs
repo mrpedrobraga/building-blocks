@@ -64,41 +64,49 @@ impl Universe {
 
 impl World {
     pub fn example() -> Self {
+        let size = UVec3::new(3, 3, 3);
+
+        const AIR: u32 = 0;
+        const DIRT: u32 = 1;
+        const WOOD: u32 = 2;
+
+        let blocks = vec![
+            Block { id: WOOD },
+            Block { id: AIR },
+            Block { id: WOOD },
+            Block { id: WOOD },
+            Block { id: AIR },
+            Block { id: WOOD },
+            Block { id: WOOD },
+            Block { id: WOOD },
+            Block { id: WOOD },
+            // ---
+            Block { id: AIR },
+            Block { id: AIR },
+            Block { id: AIR },
+            Block { id: AIR },
+            Block { id: AIR },
+            Block { id: AIR },
+            Block { id: WOOD },
+            Block { id: WOOD },
+            Block { id: WOOD },
+            // ---
+            Block { id: WOOD },
+            Block { id: AIR },
+            Block { id: WOOD },
+            Block { id: WOOD },
+            Block { id: AIR },
+            Block { id: WOOD },
+            Block { id: WOOD },
+            Block { id: WOOD },
+            Block { id: WOOD },
+        ];
+
         let example_block_cluster = BlockCluster {
             transform: Affine3A::from_translation(Vec3::new(0.0, 0.0, 0.0)),
             physics_mode: crate::block::PhysicsMode::Dynamic,
-            size: UVec3::new(3, 3, 3),
-            blocks: vec![
-                Block { id: 2 },
-                Block { id: 0 },
-                Block { id: 2 },
-                Block { id: 2 },
-                Block { id: 0 },
-                Block { id: 2 },
-                Block { id: 2 },
-                Block { id: 2 },
-                Block { id: 2 },
-                // ---
-                Block { id: 0 },
-                Block { id: 0 },
-                Block { id: 0 },
-                Block { id: 0 },
-                Block { id: 0 },
-                Block { id: 0 },
-                Block { id: 2 },
-                Block { id: 2 },
-                Block { id: 2 },
-                // ---
-                Block { id: 2 },
-                Block { id: 0 },
-                Block { id: 2 },
-                Block { id: 2 },
-                Block { id: 0 },
-                Block { id: 2 },
-                Block { id: 2 },
-                Block { id: 2 },
-                Block { id: 2 },
-            ],
+            size,
+            blocks,
             gpu: None,
         };
 

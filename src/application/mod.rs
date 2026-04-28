@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use glam::{Mat4, Quat, Vec3};
+use glam::Vec3;
 use tracing::{trace, trace_span};
 use winit::{
     application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, event_loop::EventLoop,
@@ -53,7 +53,7 @@ impl ApplicationState {
         let world = World::example();
         trace!("Created example world.");
 
-        let start_transform = Mat4::look_at_lh(
+        let start_transform = Camera::look_at_world_matrix(
             Vec3::new(10.0, 10.0, 10.0),
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::Y,
@@ -99,10 +99,10 @@ impl ApplicationState {
 
         let t = self.time_of_creation.elapsed().as_secs_f32();
 
-        self.main_camera.transform = Mat4::from_rotation_translation(
-            //Quat::from_axis_angle(Vec3::Y, t),
-            Quat::default(),
-            Vec3::new(1.5, 1.5, -3.0 + t.sin() * 3.0),
+        self.main_camera.transform = Camera::look_at_world_matrix(
+            Vec3::new(10.0, 10.0, 10.0).rotate_z(t),
+            Vec3::new(1.5, 1.5, 1.5),
+            Vec3::Z,
         );
     }
 }
