@@ -5,16 +5,12 @@
 use std::sync::Arc;
 
 use glam::{Mat4, Quat, UVec2, Vec3};
-use tracing::{info_span, warn};
 use wgpu::{util::DeviceExt, Device, Instance, InstanceDescriptor, Queue, RequestAdapterOptions};
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::{
-    client::application::render::{
-        pipeline::{BlocksPipeline, GlobalUniforms},
-        render_target::{RenderTarget, WindowRenderTarget},
-    },
-    universe::{Universe, World},
+use crate::client::application::render::{
+    pipeline::{BlocksPipeline, GlobalUniforms},
+    render_target::{RenderTarget, TextureViewSet, WindowRenderTarget},
 };
 
 pub mod camera;
@@ -108,7 +104,98 @@ impl RenderClient {
 
     /// Draws onto the render target!
     pub fn draw(&mut self) {
-        // Nothing here yet!
+        // TODO: In the future, a texture view set will be passed as an argument.
+        let texture_view_set = self
+            .window_render_target
+            .texture_view_set()
+            .expect("Couldn't get target texture view");
+
+        // The command encoder, our beloved, is how we schedule commands to be sent to the GPU.
+        let mut command_encoder = self.gpu.device.create_command_encoder(&Default::default());
+
+        let mut _render_pass = self.create_render_pass(&mut command_encoder, &texture_view_set);
+
+        // TODO: Go through the different pipelines rendering everything.
+
+        // - Render skybox (data-driven shader)
+        // - Render tiles (data-driven shader)
+        // - Render sprites (data-driven shader)
+        // - Render particles (data-driven shader)
+        // - Custom rendering (data-driven pipeline)
+        // - World post-processing (data-driven shader)
+        // - Render Gizmos and GUI
+
+        drop(_render_pass);
+
+        // Send all commands to the GPU.
+        self.gpu
+            .queue
+            .submit(std::iter::once(command_encoder.finish()));
+
+        // TODO: In the future, presenting should be handled at by the caller of this function.
+        if let Some(surface_texture) = texture_view_set.surface {
+            surface_texture.present();
+        };
+    }
+
+    fn create_render_pass<'pass>(
+        &self,
+        command_encoder: &'pass mut wgpu::CommandEncoder,
+        texture_view_set: &TextureViewSet,
+    ) -> wgpu::RenderPass<'pass> {
+        // TODO: Instead of a clear colour, in the future, I'll render a sky box.
+        // Actually, the sky will be white and the floor will be a fractal checkerboard pattern.
+        //
+        // A light clear colour, or even a dark one but not pure black, is more "fun" and "toyish" and less intimidating.
+        let clear_color = wgpu::Color {
+            r: 0.9,
+            g: 0.9,
+            b: 0.9,
+            a: 1.0,
+        };
+
+        let albedo = wgpu::RenderPassColorAttachment {
+            view: &texture_view_set.albedo,
+            ops: wgpu::Operations {
+                // LoadOp "don't care" could be used here, since we'll always draw the void.
+                load: wgpu::LoadOp::Clear(clear_color),
+                store: wgpu::StoreOp::Store,
+            },
+            // Not used since the albedo texture isn't 3D.
+            depth_slice: None,
+            // No multisampling is used, so this is set to None.
+            resolve_target: None,
+        };
+
+        let depth = wgpu::RenderPassDepthStencilAttachment {
+            view: &texture_view_set.depth,
+            depth_ops: Some(wgpu::Operations {
+                // This is 1.0 (infinitely far) by default.
+                // The "skybox" floor, even though it's rendered,
+                // will never actually occlude anything in the scene, you see.
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Store,
+            }),
+            // The stencil buffer is unused.
+            stencil_ops: None,
+        };
+
+        command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Main Render Pass"),
+            color_attachments: &[Some(albedo)],
+            depth_stencil_attachment: Some(depth),
+
+            // TODO: Enable this for accurate GPU profiling!
+            timestamp_writes: None,
+            // TODO: Enable this for multiview rendering situations such as VR!
+            // In VR, the render target will be an ArrayTexture with two layers...
+            // The shader will differentiate between the left and right eye and slightly translate the world
+            // based on the camera's setting for eye separation.
+            multiview_mask: None,
+            // This is for querying "actual" visibility, that is, if the GPU actually rendered certain objects.
+            // I don't think I'll ever use this.
+            occlusion_query_set: None,
+        })
     }
 }
 
