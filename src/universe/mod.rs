@@ -8,25 +8,39 @@ use glam::{Affine3A, UVec3, Vec2, Vec3};
 use indexmap::IndexMap;
 
 use crate::{
-    block::{Block, BlockCluster, BlockDefinition, PerFace, RenderMaterial},
+    block::{Block, BlockAppearance, BlockDefinition, BlockGroup, PerFace, RenderMaterial},
     Id,
 };
 
 /// See the module-level documentation.
+#[derive(Clone)]
 pub struct Universe {
     pub block_definitions: IndexMap<Id, BlockDefinition>,
-    pub gpu: Option<UniverseGpu>,
 }
 
-pub struct UniverseGpu {
-    pub block_definitions_buffer: wgpu::Buffer,
-    pub material_texture_atlas: wgpu::Texture,
-    pub bind_group: wgpu::BindGroup,
-}
-
-/// A World contains blocks, clusters and entities.
+/// A World is a collection of scenes plus some metadata.
 pub struct World {
-    pub block_clusters: Arena<BlockCluster>,
+    pub scenes: IndexMap<Id, Scene>,
+}
+
+/// A scene is a root layout plus some environment data!
+#[derive(Clone)]
+pub struct Scene {
+    pub environment: Environment,
+    pub root_layout: Layout,
+}
+
+/// The environment of a scene.
+///
+/// Futurely, this will contain per scene metadata such as
+/// the skybox, lighting, which shaders to use, etc.
+#[derive(Clone)]
+pub struct Environment {}
+
+/// A layout is a reusable collection of block groups, entities, etc.
+#[derive(Clone)]
+pub struct Layout {
+    pub block_groups: Arena<BlockGroup>,
 }
 
 impl Universe {
@@ -37,10 +51,12 @@ impl Universe {
             "dirt".to_string(),
             BlockDefinition {
                 display_name: "Dirt".to_string(),
-                material: PerFace::homogeneous(RenderMaterial {
-                    atlas_position: Vec2::new(0.0, 0.0),
-                    atlas_size: Vec2::new(8.0, 8.0),
-                }),
+                appearance: BlockAppearance {
+                    material: PerFace::homogeneous(RenderMaterial {
+                        atlas_position: Vec2::new(0.0, 0.0),
+                        atlas_size: Vec2::new(8.0, 8.0),
+                    }),
+                },
             },
         );
 
@@ -48,17 +64,16 @@ impl Universe {
             "grassy_dirt".to_string(),
             BlockDefinition {
                 display_name: "Grassy Dirt".to_string(),
-                material: PerFace::homogeneous(RenderMaterial {
-                    atlas_position: Vec2::new(8.0, 0.0),
-                    atlas_size: Vec2::new(8.0, 8.0),
-                }),
+                appearance: BlockAppearance {
+                    material: PerFace::homogeneous(RenderMaterial {
+                        atlas_position: Vec2::new(8.0, 0.0),
+                        atlas_size: Vec2::new(8.0, 8.0),
+                    }),
+                },
             },
         );
 
-        Universe {
-            block_definitions,
-            gpu: None,
-        }
+        Universe { block_definitions }
     }
 }
 
@@ -102,17 +117,26 @@ impl World {
             Block { id: WOOD },
         ];
 
-        let example_block_cluster = BlockCluster {
+        let block_group_0 = BlockGroup {
             transform: Affine3A::from_translation(Vec3::new(0.0, 0.0, 0.0)),
             physics_mode: crate::block::PhysicsMode::Dynamic,
             size,
             blocks,
-            gpu: None,
         };
 
-        let mut block_clusters = Arena::new();
-        block_clusters.insert(example_block_cluster);
+        let mut block_groups = Arena::new();
+        block_groups.insert(block_group_0);
 
-        World { block_clusters }
+        let root_layout = Layout { block_groups };
+
+        let scene = Scene {
+            environment: Environment {},
+            root_layout,
+        };
+
+        let mut scenes = IndexMap::new();
+        scenes.insert("default".to_owned(), scene);
+
+        World { scenes }
     }
 }

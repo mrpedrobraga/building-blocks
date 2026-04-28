@@ -1,9 +1,18 @@
 use glam::{Affine3A, UVec3, UVec4, Vec2};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockDefinition {
     pub display_name: String,
+    pub appearance: BlockAppearance,
+}
+
+/// The appearance of a block.
+///
+/// TODO: Allow blocks to have non-cuboid appearances!
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockAppearance {
+    /// TODO: Materials will be stored in the universe and loaded from a folder, too.
     pub material: PerFace<RenderMaterial>,
 }
 
@@ -39,16 +48,9 @@ pub struct RenderMaterial {
     pub atlas_size: Vec2,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct RenderMaterialGpu {
-    pub atlas_position: Vec2,
-    pub atlas_size: Vec2,
-}
-
 pub type BlockId = u32;
 
-/// A Block entry in a Cluster.
+/// A single entry in a [`BlockGroup`].
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Block {
     pub id: BlockId,
@@ -56,24 +58,22 @@ pub struct Block {
 
 /// A collection of blocks that's somewhere in the world.
 #[derive(Serialize, Deserialize)]
-pub struct BlockCluster {
+pub struct BlockGroup {
     pub transform: Affine3A,
     pub physics_mode: PhysicsMode,
     pub size: UVec3,
     pub blocks: Vec<Block>,
-
-    #[serde(skip_serializing, skip_deserializing)]
-    pub gpu: Option<(BlockClusterGpuUniforms, BlockClusterRenderResources)>,
+    // #[serde(skip_serializing, skip_deserializing)]
+    // pub gpu: Option<(BlockClusterGpuUniforms, BlockClusterRenderResources)>,
 }
 
-impl Clone for BlockCluster {
+impl Clone for BlockGroup {
     fn clone(&self) -> Self {
         Self {
             transform: self.transform.clone(),
             physics_mode: self.physics_mode.clone(),
             size: self.size.clone(),
             blocks: self.blocks.clone(),
-            gpu: None,
         }
     }
 }

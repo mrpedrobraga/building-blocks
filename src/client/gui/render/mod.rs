@@ -1,37 +1,57 @@
 //! # Render
 //!
-//! Render engine that renders everything to the screen :-)
+//! The main struct here is [`RenderClient`] — it keeps track of a universe (with definitions of blocks, materials, etc),
+//! and the current world it's rendering. Those are usually pulled from a server currently running a game,
+//! but not necessarily — you can render a universe and a world created out of thin air, or snapshots of one loaded from a file.
 
 use std::sync::Arc;
 
-use glam::{Mat4, Quat, UVec2, Vec3};
-use wgpu::{util::DeviceExt, Device, Instance, InstanceDescriptor, Queue, RequestAdapterOptions};
+use glam::{UVec2, UVec3};
+use image::{ImageBuffer, Rgba};
+use wgpu::{Device, Instance, InstanceDescriptor, Queue, RequestAdapterOptions};
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::client::application::render::{
-    pipeline::{BlocksPipeline, GlobalUniforms},
-    render_target::{RenderTarget, TextureViewSet, WindowRenderTarget},
+use crate::{
+    block::{Block, BlockDefinition},
+    client::{
+        gui::render::{
+            pipeline::{BlockGroupPipeline, GlobalUniforms},
+            render_target::{RenderTarget, TextureViewSet, WindowRenderTarget},
+            views::{SceneRenderView, UniverseRenderView},
+        },
+        GameView,
+    },
 };
 
 pub mod camera;
 pub mod pipeline;
 pub mod render_target;
 pub mod tmp;
+pub mod views;
 
+pub struct Gpu {
+    device: Device,
+    queue: Queue,
+}
+
+/// The main struct of this module!
+///
+/// See the module-level documentation.
 pub struct RenderClient {
     pub window: Arc<Window>,
     pub window_render_target: WindowRenderTarget,
-    // TODO: Actually, maybe the render client shouldn't be the one holding the GPU connection...
-    // Application might do it instead.
-    gpu: Gpu,
-}
 
-pub struct Gpu {
-    pipeline: BlocksPipeline,
-    device: Device,
-    queue: Queue,
+    #[allow(unused)]
+    pipeline: BlockGroupPipeline,
     global_uniforms: GlobalUniforms,
     global_uniform_buffer: wgpu::Buffer,
+
+    universe_render_view: Option<UniverseRenderView>,
+    current_scene_render_view: Option<SceneRenderView>,
+
+    // TODO: Actually, maybe the render client shouldn't be the one holding the GPU connection...
+    // `Application` might do it instead.
+    gpu: Gpu,
 }
 
 impl RenderClient {
@@ -59,39 +79,30 @@ impl RenderClient {
             .await
             .unwrap();
 
+        let gpu = Gpu { device, queue };
+
         // We create an empty uniform buffer (we'll write to it before rendering for the first time, dw!)
-        let global_uniforms = GlobalUniforms {
-            view_matrix: Mat4::from_rotation_translation(Quat::default(), Vec3::new(0.0, 0.0, 0.0))
-                .to_cols_array(),
-            global_time: 0.0,
-            x2: 0.0,
-            x3: 0.0,
-            x4: 0.0,
-        };
-
-        let global_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let global_uniform_buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Cluster Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[global_uniforms]),
+            size: std::mem::size_of::<GlobalUniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
-
-        let pipeline = BlocksPipeline::new(&device, surface_format);
-
-        let gpu = Gpu {
-            pipeline,
-            device,
-            queue,
-            global_uniforms,
-            global_uniform_buffer,
-        };
 
         let window_render_target =
             WindowRenderTarget::new(window.inner_size(), surface, surface_format, &gpu.device);
 
+        let pipeline = BlockGroupPipeline::new(&gpu.device, surface_format);
+
         Self {
+            pipeline,
             window,
             window_render_target,
             gpu,
+            global_uniforms: GlobalUniforms::default(),
+            global_uniform_buffer,
+            universe_render_view: None,
+            current_scene_render_view: None,
         }
     }
 
@@ -100,6 +111,23 @@ impl RenderClient {
     pub fn resize(&mut self, new_size: UVec2) {
         self.window_render_target
             .resize(&self.gpu.device, PhysicalSize::new(new_size.x, new_size.y));
+    }
+
+    /// Syncs the uniforms to the GPU!
+    pub fn sync_uniforms(&self) {
+        self.gpu.queue.write_buffer(
+            &self.global_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.global_uniforms]),
+        );
+    }
+
+    /// Creates render views from a client's view of a world.
+    pub fn prepare_from_scratch(&mut self, game_view: &GameView) {
+        self.universe_render_view = Some(UniverseRenderView::new(
+            &self.gpu,
+            &game_view.current_universe,
+        ));
     }
 
     /// Draws onto the render target!
@@ -196,17 +224,6 @@ impl RenderClient {
             // I don't think I'll ever use this.
             occlusion_query_set: None,
         })
-    }
-}
-
-impl Gpu {
-    /// Syncs the uniforms to the GPU!
-    pub fn sync_uniforms(&self) {
-        self.queue.write_buffer(
-            &self.global_uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[self.global_uniforms]),
-        );
     }
 }
 

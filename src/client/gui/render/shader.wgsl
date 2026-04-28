@@ -10,23 +10,22 @@ struct RenderMaterial {
 struct GlobalUniforms {
     view_proj: mat4x4<f32>,
     global_time: f32,
-    x2: f32,
-    x3: f32,
-    x4: f32,
+    _padding: vec3<u32>,
 };
 
 struct BlockClusterUniforms {
     transform: mat4x4<f32>,
-    size: vec4<u32>,
+    size: vec3<u32>,
+    _padding: u32
 }
 
-@group(0) @binding(0) var<uniform> globals: GlobalUniforms;
-@group(0) @binding(1) var<uniform> cluster_uniforms: BlockClusterUniforms; 
-@group(0) @binding(2) var<storage, read> block_definitions: array<BlockDefinition>;
-@group(0) @binding(3) var<storage, read> cluster_voxels: array<u32>;
+@group(0) @binding(0) var material_atlas: texture_2d<f32>;
+@group(0) @binding(1) var material_atlas_s: sampler;
 
-@group(1) @binding(0) var material_atlas: texture_2d<f32>;
-@group(1) @binding(1) var material_atlas_s: sampler;
+@group(1) @binding(0) var<uniform> globals: GlobalUniforms;
+@group(1) @binding(1) var<storage, read> block_definitions: array<BlockDefinition>;
+@group(1) @binding(2) var<uniform> block_group_uniforms: BlockClusterUniforms; 
+@group(1) @binding(3) var<storage, read> block_group_data: array<u32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -78,13 +77,13 @@ fn vs_main(
     @builtin(vertex_index) v_idx: u32,
     @builtin(instance_index) i_idx: u32
 ) -> VertexOutput {
-    let raw_block_id = cluster_voxels[i_idx];
+    let raw_block_id = block_group_data[i_idx];
     if raw_block_id == 0u {
         return VertexOutput(vec4<f32>(0.0), vec2<f32>(0.0), 0, 0.0);
     }
     let block_id = raw_block_id - 1;
 
-    let size = cluster_uniforms.size.xyz;
+    let size = block_group_uniforms.size.xyz;
     let x = i_idx % size.x;
     let y = (i_idx / size.x) % size.y;
     let z = i_idx / (size.x * size.y);
@@ -96,7 +95,7 @@ fn vs_main(
     let face_idx = v_idx / 6u;
     let uv_idx = v_idx % 6u; // Which vertex of the face are we on?
 
-    var world_pos = cluster_uniforms.transform * vec4<f32>(grid_pos + local_pos, 1.0);
+    var world_pos = block_group_uniforms.transform * vec4<f32>(grid_pos + local_pos, 1.0);
 
     var out: VertexOutput;
     out.clip_position = globals.view_proj * world_pos;

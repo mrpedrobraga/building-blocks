@@ -2,12 +2,24 @@
 //!
 //! Traits and structs for clients which are a player's way of interacting with a universe.
 
-use crate::{client::application::Application, server::ServerInterface};
+use crate::{
+    client::gui::Application,
+    server::{ClientMetadata, ServerAdapter},
+    universe::{Scene, Universe, World},
+};
 
-pub mod application;
+pub mod gui;
 
 pub trait Client {
-    fn try_connect<S: ServerInterface>(&mut self, server: S) -> Result<(), ()>;
+    fn try_connect<S: ServerAdapter + 'static>(&mut self, server: S) -> Result<(), ()>;
+
+    fn metadata(&self) -> ClientMetadata;
+}
+
+pub struct GameView {
+    pub current_universe: Universe,
+    pub current_world: World,
+    pub current_scene: Scene,
 }
 
 pub struct DummyClient {}
@@ -19,19 +31,29 @@ impl DummyClient {
 }
 
 impl Client for DummyClient {
-    fn try_connect<S: ServerInterface>(&mut self, #[expect(unused)] server: S) -> Result<(), ()> {
+    fn try_connect<S: ServerAdapter>(&mut self, #[expect(unused)] server: S) -> Result<(), ()> {
         Ok(())
+    }
+
+    fn metadata(&self) -> ClientMetadata {
+        ClientMetadata {}
     }
 }
 
 /// The "default" GUI client.
 ///
 /// It launches a desktop application through which you can connect to servers and stuff.
-pub struct GuiClient {}
+pub struct GuiClient {
+    server_interface: Option<Box<dyn ServerAdapter>>,
+    pub game_resources: Option<GameView>,
+}
 
 impl GuiClient {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            server_interface: None,
+            game_resources: None,
+        }
     }
 
     /// Runs the application.
@@ -54,7 +76,15 @@ impl GuiClient {
 }
 
 impl Client for GuiClient {
-    fn try_connect<S: ServerInterface>(&mut self, #[allow(unused)] server: S) -> Result<(), ()> {
+    fn try_connect<S: ServerAdapter + 'static>(
+        &mut self,
+        #[allow(unused)] server: S,
+    ) -> Result<(), ()> {
+        self.server_interface.replace(Box::new(server));
         Ok(())
+    }
+
+    fn metadata(&self) -> ClientMetadata {
+        ClientMetadata {}
     }
 }

@@ -10,14 +10,17 @@ use winit::{
     window::WindowAttributes,
 };
 
-use crate::client::{application::render::RenderClient, GuiClient};
+use crate::{
+    client::{gui::render::RenderClient, GameView, GuiClient},
+    universe::{Universe, World},
+};
 
 pub mod render;
 
 pub struct Application<'app> {
     // TODO: Maybe use a less exclusive reference, like an Arc+Mutex?
     // Right now it's expected that the application has full control over the client, you see...
-    pub client: &'app GuiClient,
+    pub client: &'app mut GuiClient,
     pub state: Option<ApplicationState>,
 }
 
@@ -32,7 +35,7 @@ pub struct ApplicationState {
 }
 
 impl ApplicationState {
-    fn new(event_loop: &winit::event_loop::ActiveEventLoop) -> Self {
+    fn new(client: &mut GuiClient, event_loop: &winit::event_loop::ActiveEventLoop) -> Self {
         let s = info_span!("application_state");
         let _ = s.enter();
 
@@ -46,8 +49,29 @@ impl ApplicationState {
             )
             .expect("Failed to create application window!");
         let window = Arc::new(window);
+        let mut render_client = pollster::block_on(RenderClient::new(window));
 
-        let render_client = pollster::block_on(RenderClient::new(window));
+        info!("Gathering information from the server...");
+
+        // TODO: Get resources from the server on another task,
+        // using some very granular multi-threading!
+        let universe = Universe::example();
+
+        // World creation and world loading will be both dictated by `Universe`.
+        // It can be as simple as duplicating a template, and as complex as generating terrain.
+        let world = World::example();
+        // Loading a first scene from a world will also be decided by the Universe.
+        let scene = world.scenes.get("default").cloned().unwrap();
+
+        let game_view = GameView {
+            current_universe: universe,
+            current_world: world,
+            current_scene: scene,
+        };
+
+        render_client.prepare_from_scratch(&game_view);
+
+        client.game_resources = Some(game_view);
 
         info!("All done, let's run the app now!");
 
@@ -88,7 +112,7 @@ impl<'app> Application<'app> {
 impl<'app> ApplicationHandler for Application<'app> {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         if self.state.is_none() {
-            self.state = Some(ApplicationState::new(event_loop));
+            self.state = Some(ApplicationState::new(&mut self.client, event_loop));
         }
     }
 
