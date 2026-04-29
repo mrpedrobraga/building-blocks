@@ -16,7 +16,6 @@
 //!
 //!
 
-use glam::UVec3;
 use wgpu::{
     include_wgsl, BindGroupLayout, Device, PipelineLayoutDescriptor, PrimitiveState,
     RenderPipeline, RenderPipelineDescriptor, TextureFormat,
