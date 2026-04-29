@@ -18,15 +18,14 @@
 
 use glam::UVec3;
 use wgpu::{
-    include_wgsl, BindGroupLayout, BindGroupLayoutEntry, Device, PipelineLayoutDescriptor,
-    PrimitiveState, RenderPipeline, RenderPipelineDescriptor, TextureFormat,
+    include_wgsl, BindGroupLayout, Device, PipelineLayoutDescriptor, PrimitiveState,
+    RenderPipeline, RenderPipelineDescriptor, TextureFormat,
 };
 
 pub struct BlockGroupPipeline {
-    pub(crate) render_pipeline: RenderPipeline,
-    // TODO: Move this to RenderClient!
-    pub(crate) universe_bind_group_layout: BindGroupLayout,
-    pub(crate) block_cluster_bind_group_layout: BindGroupLayout,
+    pub universe_bind_group_layout: BindGroupLayout,
+    pub block_group_bind_group_layout: BindGroupLayout,
+    pub render_pipeline: RenderPipeline,
 }
 
 #[repr(C)]
@@ -34,106 +33,23 @@ pub struct BlockGroupPipeline {
 pub struct GlobalUniforms {
     pub view_matrix: [f32; 16],
     pub global_time: f32,
-    pub _padding: UVec3,
+    pub _padding: [f32; 3],
 }
 
 impl BlockGroupPipeline {
-    pub fn new(gpu_device: &Device, render_target_format: TextureFormat) -> Self {
+    pub fn new(
+        gpu_device: &Device,
+        render_target_format: TextureFormat,
+        universe_bind_group_layout: wgpu::BindGroupLayout,
+        block_group_bind_group_layout: wgpu::BindGroupLayout,
+    ) -> Self {
         let shader = gpu_device.create_shader_module(include_wgsl!("shader.wgsl"));
-
-        let vertex = wgpu::ShaderStages::VERTEX;
-        let fragment = wgpu::ShaderStages::FRAGMENT;
-        let both = wgpu::ShaderStages::VERTEX_FRAGMENT;
-
-        /*
-            @group(0) @binding(0) var material_atlas: texture_2d<f32>;
-            @group(0) @binding(1) var material_atlas_s: sampler;
-        */
-        let material_atlas = BindGroupLayoutEntry {
-            binding: 0,
-            visibility: fragment,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: wgpu::TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        };
-        let material_atlas_sampler = BindGroupLayoutEntry {
-            binding: 1,
-            visibility: fragment,
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-            count: None,
-        };
-        let global_bind_group_layout =
-            gpu_device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Universe Bind Group Layout"),
-                entries: &[material_atlas, material_atlas_sampler],
-            });
-
-        /*
-            @group(1) @binding(0) var<uniform> globals: GlobalUniforms;
-            @group(1) @binding(1) var<storage, read> block_definitions: array<BlockDefinition>;
-            @group(1) @binding(2) var<uniform> block_group_uniforms: BlockClusterUniforms;
-            @group(1) @binding(3) var<storage, read> block_group_data: array<u32>;
-        */
-        let global_uniforms = BindGroupLayoutEntry {
-            binding: 0,
-            visibility: vertex,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }; // TODO: Move to a different bind group.
-        let block_group_palette_buffer = BindGroupLayoutEntry {
-            binding: 1,
-            visibility: both,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-        let block_group_uniforms = BindGroupLayoutEntry {
-            binding: 2,
-            visibility: vertex,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-        let block_group_data = BindGroupLayoutEntry {
-            binding: 3,
-            visibility: vertex,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-
-        let block_cluster_bind_group_layout =
-            gpu_device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Block Bind Group Layout"),
-                entries: &[
-                    global_uniforms,
-                    block_group_palette_buffer,
-                    block_group_uniforms,
-                    block_group_data,
-                ],
-            });
 
         let render_pipeline_layout = gpu_device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout Descriptor"),
             bind_group_layouts: &[
-                Some(&global_bind_group_layout),
-                Some(&block_cluster_bind_group_layout),
+                Some(&universe_bind_group_layout),
+                Some(&block_group_bind_group_layout),
             ],
             immediate_size: 0,
         });
@@ -183,9 +99,9 @@ impl BlockGroupPipeline {
         });
 
         BlockGroupPipeline {
+            universe_bind_group_layout,
+            block_group_bind_group_layout,
             render_pipeline,
-            universe_bind_group_layout: global_bind_group_layout,
-            block_cluster_bind_group_layout,
         }
     }
 }

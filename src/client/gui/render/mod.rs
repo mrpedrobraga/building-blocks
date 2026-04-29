@@ -6,21 +6,19 @@
 
 use std::sync::Arc;
 
-use glam::{UVec2, UVec3};
-use image::{ImageBuffer, Rgba};
-use wgpu::{Device, Instance, InstanceDescriptor, Queue, RequestAdapterOptions};
+use glam::{UVec2, Vec3};
+use tracing::{info, info_span};
+use wgpu::{BindGroupLayout, Device, Instance, InstanceDescriptor, Queue, RequestAdapterOptions};
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::{
-    block::{Block, BlockDefinition},
-    client::{
-        gui::render::{
-            pipeline::{BlockGroupPipeline, GlobalUniforms},
-            render_target::{RenderTarget, TextureViewSet, WindowRenderTarget},
-            views::{SceneRenderView, UniverseRenderView},
-        },
-        GameView,
+use crate::client::{
+    gui::render::{
+        camera::Camera,
+        pipeline::{BlockGroupPipeline, GlobalUniforms},
+        render_target::{RenderTarget, TextureViewSet, WindowRenderTarget},
+        views::{BlockGroupRenderView, SceneRenderView, UniverseRenderView},
     },
+    GameView,
 };
 
 pub mod camera;
@@ -41,13 +39,13 @@ pub struct RenderClient {
     pub window: Arc<Window>,
     pub window_render_target: WindowRenderTarget,
 
-    #[allow(unused)]
-    pipeline: BlockGroupPipeline,
     global_uniforms: GlobalUniforms,
     global_uniform_buffer: wgpu::Buffer,
 
-    universe_render_view: Option<UniverseRenderView>,
-    current_scene_render_view: Option<SceneRenderView>,
+    pub universe_render_view: Option<UniverseRenderView>,
+    pub current_scene_render_view: Option<SceneRenderView>,
+
+    pub block_group_pipeline: Option<BlockGroupPipeline>,
 
     // TODO: Actually, maybe the render client shouldn't be the one holding the GPU connection...
     // `Application` might do it instead.
@@ -92,10 +90,7 @@ impl RenderClient {
         let window_render_target =
             WindowRenderTarget::new(window.inner_size(), surface, surface_format, &gpu.device);
 
-        let pipeline = BlockGroupPipeline::new(&gpu.device, surface_format);
-
         Self {
-            pipeline,
             window,
             window_render_target,
             gpu,
@@ -103,6 +98,7 @@ impl RenderClient {
             global_uniform_buffer,
             universe_render_view: None,
             current_scene_render_view: None,
+            block_group_pipeline: None,
         }
     }
 
@@ -124,14 +120,61 @@ impl RenderClient {
 
     /// Creates render views from a client's view of a world.
     pub fn prepare_from_scratch(&mut self, game_view: &GameView) {
-        self.universe_render_view = Some(UniverseRenderView::new(
+        let universe_bind_group_layout = UniverseRenderView::bind_group_layout(&self.gpu);
+        let block_group_bind_group_layout = BlockGroupRenderView::bind_group_layout(&self.gpu);
+
+        let screen_size = UVec2::new(
+            self.window_render_target.surface_size.width,
+            self.window_render_target.surface_size.height,
+        );
+        // TODO: Get the camera from somewhere else lol.
+        let c = Camera {
+            transform: Camera::make_look_at_matrix(
+                Vec3::new(5.0, 5.0, 5.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::Z,
+            ),
+            projection: camera::CameraProjection::Perspective {
+                vertical_fov_radians: 60.0,
+                z_near_clipping_plane: 0.001,
+                z_far_clipping_plane: 1000.0,
+            },
+        };
+        self.global_uniforms = GlobalUniforms {
+            view_matrix: c.view_matrix(screen_size).to_cols_array(),
+            global_time: 0.0,
+            _padding: [0.0; 3],
+        };
+        self.sync_uniforms();
+
+        let universe_render_view = UniverseRenderView::new(
             &self.gpu,
+            &self.global_uniform_buffer,
             &game_view.current_universe,
+            &universe_bind_group_layout,
+        );
+        let current_scene_render_view = SceneRenderView::new(
+            &self.gpu,
+            &game_view.current_scene,
+            &block_group_bind_group_layout,
+        );
+
+        self.universe_render_view = Some(universe_render_view);
+        self.current_scene_render_view = Some(current_scene_render_view);
+
+        self.block_group_pipeline = Some(BlockGroupPipeline::new(
+            &self.gpu.device,
+            self.window_render_target.surface_config.format,
+            universe_bind_group_layout,
+            block_group_bind_group_layout,
         ));
     }
 
     /// Draws onto the render target!
     pub fn draw(&mut self) {
+        let s = info_span!("render client draw");
+        let _ = s.enter();
+
         // TODO: In the future, a texture view set will be passed as an argument.
         let texture_view_set = self
             .window_render_target
@@ -152,6 +195,21 @@ impl RenderClient {
         // - Custom rendering (data-driven pipeline)
         // - World post-processing (data-driven shader)
         // - Render Gizmos and GUI
+
+        if let Some(universe_render_view) = &self.universe_render_view {
+            _render_pass.set_bind_group(0, Some(&universe_render_view.bind_group), &[]);
+
+            if let Some(block_group_pipeline) = &self.block_group_pipeline {
+                _render_pass.set_pipeline(&block_group_pipeline.render_pipeline);
+
+                if let Some(scene_render_view) = &self.current_scene_render_view {
+                    for block_group in &scene_render_view.block_groups {
+                        _render_pass.set_bind_group(1, Some(&block_group.bind_group), &[]);
+                        _render_pass.draw(0..36, 0..block_group.volume());
+                    }
+                }
+            }
+        }
 
         drop(_render_pass);
 

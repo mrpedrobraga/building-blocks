@@ -86,35 +86,89 @@ impl World {
         const WOOD: u32 = 2;
 
         let blocks = vec![
-            Block { id: WOOD },
-            Block { id: AIR },
-            Block { id: WOOD },
-            Block { id: WOOD },
-            Block { id: AIR },
-            Block { id: WOOD },
-            Block { id: WOOD },
-            Block { id: WOOD },
-            Block { id: WOOD },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
             // ---
-            Block { id: AIR },
-            Block { id: AIR },
-            Block { id: AIR },
-            Block { id: AIR },
-            Block { id: AIR },
-            Block { id: AIR },
-            Block { id: WOOD },
-            Block { id: WOOD },
-            Block { id: WOOD },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
             // ---
-            Block { id: WOOD },
-            Block { id: AIR },
-            Block { id: WOOD },
-            Block { id: WOOD },
-            Block { id: AIR },
-            Block { id: WOOD },
-            Block { id: WOOD },
-            Block { id: WOOD },
-            Block { id: WOOD },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: AIR,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
+            Block {
+                idx_in_palette: WOOD,
+            },
         ];
 
         let block_group_0 = BlockGroup {

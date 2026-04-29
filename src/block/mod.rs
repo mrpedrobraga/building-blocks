@@ -48,12 +48,10 @@ pub struct RenderMaterial {
     pub atlas_size: Vec2,
 }
 
-pub type BlockId = u32;
-
 /// A single entry in a [`BlockGroup`].
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Block {
-    pub id: BlockId,
+    pub idx_in_palette: u32,
 }
 
 /// A collection of blocks that's somewhere in the world.

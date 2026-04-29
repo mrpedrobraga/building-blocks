@@ -10,7 +10,9 @@ struct RenderMaterial {
 struct GlobalUniforms {
     view_proj: mat4x4<f32>,
     global_time: f32,
-    _padding: vec3<u32>,
+    _padding_0: f32,
+    _padding_1: f32,
+    _padding_2: f32,
 };
 
 struct BlockClusterUniforms {
@@ -19,13 +21,13 @@ struct BlockClusterUniforms {
     _padding: u32
 }
 
-@group(0) @binding(0) var material_atlas: texture_2d<f32>;
-@group(0) @binding(1) var material_atlas_s: sampler;
+@group(0) @binding(0) var<uniform> globals: GlobalUniforms;
+@group(0) @binding(1) var<storage, read> block_definitions: array<BlockDefinition>;
+@group(0) @binding(2) var material_atlas: texture_2d<f32>;
+@group(0) @binding(3) var material_atlas_s: sampler;
 
-@group(1) @binding(0) var<uniform> globals: GlobalUniforms;
-@group(1) @binding(1) var<storage, read> block_definitions: array<BlockDefinition>;
-@group(1) @binding(2) var<uniform> block_group_uniforms: BlockClusterUniforms; 
-@group(1) @binding(3) var<storage, read> block_group_data: array<u32>;
+@group(1) @binding(0) var<uniform> block_group_uniforms: BlockClusterUniforms; 
+@group(1) @binding(1) var<storage, read> block_group_data: array<u32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
