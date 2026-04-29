@@ -44,14 +44,14 @@ impl Client for DummyClient {
 ///
 /// It launches a desktop application through which you can connect to servers and stuff.
 pub struct GuiClient {
-    server_interface: Option<Box<dyn ServerAdapter>>,
+    server_adapter: Option<Box<dyn ServerAdapter>>,
     pub game_resources: Option<GameView>,
 }
 
 impl GuiClient {
     pub fn new() -> Self {
         Self {
-            server_interface: None,
+            server_adapter: None,
             game_resources: None,
         }
     }
@@ -78,9 +78,9 @@ impl GuiClient {
 impl Client for GuiClient {
     fn try_connect<S: ServerAdapter + 'static>(
         &mut self,
-        #[allow(unused)] server: S,
+        #[allow(unused)] server_adapter: S,
     ) -> Result<(), ()> {
-        self.server_interface.replace(Box::new(server));
+        self.server_adapter.replace(Box::new(server_adapter));
         Ok(())
     }
 

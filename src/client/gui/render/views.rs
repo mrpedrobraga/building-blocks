@@ -202,6 +202,9 @@ impl SceneRenderView {
 /// This contains only its "appearance" and has no information about, say, its collision.
 pub struct BlockGroupRenderView {
     pub uniforms: BlockGroupUniforms,
+    /// TODO: Instead of one buffer per block group, we could aggregate
+    /// data from several [`BlockGroupRenderView`]s to one single buffer with offsets.
+    /// This buffer should be stored possibly per layout or per scene.
     pub uniforms_gpu: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
 

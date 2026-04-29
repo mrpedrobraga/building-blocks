@@ -13,17 +13,18 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::client::{
     gui::render::{
+        blocks_pipeline::{BlockGroupPipeline, GlobalUniforms},
         camera::Camera,
-        pipeline::{BlockGroupPipeline, GlobalUniforms},
         render_target::{RenderTarget, TextureViewSet, WindowRenderTarget},
         views::{BlockGroupRenderView, SceneRenderView, UniverseRenderView},
     },
     GameView,
 };
 
+pub mod blocks_pipeline;
 pub mod camera;
-pub mod pipeline;
 pub mod render_target;
+pub mod squares_pipeline;
 pub mod views;
 
 pub struct Gpu {

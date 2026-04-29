@@ -12,6 +12,7 @@ use winit::{
 
 use crate::{
     client::{gui::render::RenderClient, GameView, GuiClient},
+    server::ServerAdapter,
     universe::{Universe, World},
 };
 
@@ -53,25 +54,7 @@ impl ApplicationState {
 
         info!("Gathering information from the server...");
 
-        // TODO: Get resources from the server on another task,
-        // using some very granular multi-threading!
-        let universe = Universe::example();
-
-        // World creation and world loading will be both dictated by `Universe`.
-        // It can be as simple as duplicating a template, and as complex as generating terrain.
-        let world = World::example();
-        // Loading a first scene from a world will also be decided by the Universe.
-        let scene = world.scenes.get("default").cloned().unwrap();
-
-        let game_view = GameView {
-            current_universe: universe,
-            current_world: world,
-            current_scene: scene,
-        };
-
-        render_client.prepare_from_scratch(&game_view);
-
-        client.game_resources = Some(game_view);
+        ApplicationState::prepare_from_scratch_for_server(&mut render_client, client);
 
         info!("All done, let's run the app now!");
 
@@ -80,6 +63,32 @@ impl ApplicationState {
             time_of_creation: Instant::now(),
             time_of_last_tick: Instant::now(),
             frame_time_accumulator: Duration::from_millis(0),
+        }
+    }
+
+    fn prepare_from_scratch_for_server(render_client: &mut RenderClient, client: &mut GuiClient) {
+        if let Some(_server_adapter) = &client.server_adapter {
+            // // TODO: Get resources from the server on another task,
+            // // using some very granular multi-threading!
+            let universe = _server_adapter.get_universe().unwrap();
+
+            // World creation and world loading will be both dictated by `Universe`.
+            // It can be as simple as duplicating a template, and as complex as generating terrain.
+            let world = World::example();
+            // Loading a first scene from a world will also be decided by the Universe.
+            let scene = world.scenes.get("default").cloned().unwrap();
+
+            let game_view = GameView {
+                current_universe: universe,
+                current_world: world,
+                current_scene: scene,
+            };
+
+            render_client.prepare_from_scratch(&game_view);
+
+            client.game_resources = Some(game_view);
+        } else {
+            info!("No server connected.");
         }
     }
 
