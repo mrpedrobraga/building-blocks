@@ -1,14 +1,7 @@
 /* 
-    PIXEL RENDERING SHADER
+    PASSTHROUGH TEMPLATE
 
-    This shader will render layers of pixel data on top of one another.
-*/
-
-/*
-    Global Uniforms
-    Layer Uniforms
-    - Layer transform
-    - Layer texture view and sampler
+    This renders a fullscreen quad when called with `render_pass.drawn(0..6, 0..1)`
 */
 
 struct VertexOutput {

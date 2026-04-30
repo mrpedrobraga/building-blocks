@@ -23,13 +23,13 @@ fn vs_main(
     var out: VertexOutput;
 
     let pos = array<vec2<f32>, 6>(
-        vec2<f32>(-1.0,  1.0),
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>( 1.0, -1.0),
+        vec2<f32>(-1.0,  1.0),  //  |\    (1)
+        vec2<f32>(-1.0, -1.0),  //  | \
+        vec2<f32>( 1.0, -1.0),  //  |__\  (2) (3)  (ccw)
         
-        vec2<f32>(-1.0,  1.0),
-        vec2<f32>( 1.0, -1.0),
-        vec2<f32>( 1.0,  1.0)
+        vec2<f32>(-1.0,  1.0),  //   \‾‾|  (1)
+        vec2<f32>( 1.0, -1.0),  //    \ |
+        vec2<f32>( 1.0,  1.0),  //     \|  (2) (3) (ccw)
     );
 
     let uvs = array<vec2<f32>, 6>(
@@ -42,7 +42,6 @@ fn vs_main(
         vec2<f32>(1.0, 0.0)
     );
 
-    // 3. Pull the vertex data using the index
     out.clip_position = vec4<f32>(pos[v_idx], 0.0, 1.0);
     out.uv = uvs[v_idx];
 
@@ -53,5 +52,5 @@ fn vs_main(
 fn fs_main(
     in: VertexOutput
 ) -> @location(0) vec4<f32> {
-    return vec4(in.uv.x, in.uv.y, 0.0, 1.0);
+    return vec4(in.uv.x, in.uv.y, 0.0, 0.5);
 }

@@ -16,6 +16,7 @@ use crate::client::{
         blocks_pipeline::{BlockGroupPipeline, GlobalUniforms},
         camera::Camera,
         render_target::{RenderTarget, TextureViewSet, WindowRenderTarget},
+        squares_pipeline::SquaresPipeline,
         views::{BlockGroupRenderView, SceneRenderView, UniverseRenderView},
     },
     GameView,
@@ -45,6 +46,7 @@ pub struct RenderClient {
     pub universe_render_view: Option<UniverseRenderView>,
     pub current_scene_render_view: Option<SceneRenderView>,
 
+    pub squares_pipeline: Option<SquaresPipeline>,
     pub block_group_pipeline: Option<BlockGroupPipeline>,
 
     // TODO: Actually, maybe the render client shouldn't be the one holding the GPU connection...
@@ -98,6 +100,7 @@ impl RenderClient {
             global_uniform_buffer,
             universe_render_view: None,
             current_scene_render_view: None,
+            squares_pipeline: None,
             block_group_pipeline: None,
         }
     }
@@ -107,6 +110,10 @@ impl RenderClient {
     pub fn resize(&mut self, new_size: UVec2) {
         self.window_render_target
             .resize(&self.gpu.device, PhysicalSize::new(new_size.x, new_size.y));
+
+        // TODO: Resize the layers in the GUI pipeline, yeah!
+        // will look like `self.squares_pipeline.resize(&self.gpu.device, new_size)`;
+
         // TODO: Obviously we'll access this camera from somewhere instead of creating it here.
         let c = Camera {
             transform: Camera::make_look_at_matrix(
@@ -141,16 +148,27 @@ impl RenderClient {
         let s = info_span!("render client preparing from scratch");
         let _ = s.enter();
 
+        let screen_size = UVec2::new(
+            self.window_render_target.surface_size.width,
+            self.window_render_target.surface_size.height,
+        );
+
+        /* Creating 2D information!!! */
+
+        self.squares_pipeline = Some(SquaresPipeline::new(
+            &self.gpu.device,
+            self.window_render_target.surface_config.format,
+            screen_size,
+        ));
+
+        /* Creating 3D information!!! */
+
         info!("Creating bind group layout.");
         // It's possible to create these only once for ever I'm sure.
 
         let universe_bind_group_layout = UniverseRenderView::bind_group_layout(&self.gpu);
         let block_group_bind_group_layout = BlockGroupRenderView::bind_group_layout(&self.gpu);
 
-        let screen_size = UVec2::new(
-            self.window_render_target.surface_size.width,
-            self.window_render_target.surface_size.height,
-        );
         // TODO: Get the camera from somewhere else lol.
         let c = Camera {
             transform: Camera::make_look_at_matrix(
@@ -240,6 +258,13 @@ impl RenderClient {
                     }
                 }
             }
+        }
+
+        if let Some(squares_pipeline) = &self.squares_pipeline {
+            _render_pass.set_bind_group(0, None, &[]);
+            _render_pass.set_bind_group(1, None, &[]);
+            _render_pass.set_pipeline(&squares_pipeline.render_to_screen_pipeline);
+            _render_pass.draw(0..6, 0..1);
         }
 
         drop(_render_pass);
