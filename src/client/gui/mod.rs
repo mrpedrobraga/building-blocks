@@ -12,8 +12,7 @@ use winit::{
 
 use crate::{
     client::{gui::render::RenderClient, GameView, GuiClient},
-    server::ServerAdapter,
-    universe::{Universe, World},
+    universe::World,
 };
 
 pub mod render;
@@ -67,13 +66,14 @@ impl ApplicationState {
     }
 
     fn prepare_from_scratch_for_server(render_client: &mut RenderClient, client: &mut GuiClient) {
-        if let Some(_server_adapter) = &client.server_adapter {
-            // // TODO: Get resources from the server on another task,
-            // // using some very granular multi-threading!
-            let universe = _server_adapter.get_universe().unwrap();
+        if let Some(server) = &client.server_adapter {
+            // TODO: Stream resources from the server on another thread
+            // so we don't lag while waiting for resources.
+            let universe = server.get_universe().unwrap();
 
-            // World creation and world loading will be both dictated by `Universe`.
-            // It can be as simple as duplicating a template, and as complex as generating terrain.
+            // So, we're creating a dummy world here...
+            //
+            // In reality, joining a world will be a message incoming from the server.
             let world = World::example();
             // Loading a first scene from a world will also be decided by the Universe.
             let scene = world.scenes.get("default").cloned().unwrap();
@@ -84,6 +84,7 @@ impl ApplicationState {
                 current_scene: scene,
             };
 
+            // TODO: Introduce granular updates to the content of the render client.
             render_client.prepare_from_scratch(&game_view);
 
             client.game_resources = Some(game_view);

@@ -16,6 +16,9 @@ struct VertexOutput {
     @location(0) @interpolate(perspective) uv: vec2<f32>,
 };
 
+@group(0) @binding(0) var source_view: texture_2d<f32>;
+@group(0) @binding(1) var source_sampler: sampler;
+
 @vertex
 fn vs_main(
     @builtin(vertex_index) v_idx: u32,
@@ -52,5 +55,5 @@ fn vs_main(
 fn fs_main(
     in: VertexOutput
 ) -> @location(0) vec4<f32> {
-    return vec4(in.uv.x, in.uv.y, 0.0, 0.5);
+    return textureSample(source_view, source_sampler, in.uv);
 }

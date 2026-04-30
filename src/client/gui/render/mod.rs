@@ -156,7 +156,7 @@ impl RenderClient {
         /* Creating 2D information!!! */
 
         self.squares_pipeline = Some(SquaresPipeline::new(
-            &self.gpu.device,
+            &self.gpu,
             self.window_render_target.surface_config.format,
             screen_size,
         ));
@@ -261,7 +261,11 @@ impl RenderClient {
         }
 
         if let Some(squares_pipeline) = &self.squares_pipeline {
-            _render_pass.set_bind_group(0, None, &[]);
+            _render_pass.set_bind_group(
+                0,
+                Some(&squares_pipeline.render_to_screen_bind_group),
+                &[],
+            );
             _render_pass.set_bind_group(1, None, &[]);
             _render_pass.set_pipeline(&squares_pipeline.render_to_screen_pipeline);
             _render_pass.draw(0..6, 0..1);
