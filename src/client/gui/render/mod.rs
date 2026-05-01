@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use glam::{UVec2, Vec3};
 use tracing::{info, info_span};
-use wgpu::{Device, Instance, InstanceDescriptor, Queue, RequestAdapterOptions};
+use wgpu::{Device, Queue};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::client::{
@@ -29,15 +29,20 @@ pub mod squares_pipeline;
 pub mod views;
 
 pub struct Gpu {
-    device: Device,
-    queue: Queue,
+    pub device: Device,
+    pub queue: Queue,
+}
+
+impl Gpu {
+    pub async fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
+        Self { device, queue }
+    }
 }
 
 /// The main struct of this module!
 ///
 /// See the module-level documentation.
 pub struct RenderClient {
-    pub window: Arc<Window>,
     pub window_render_target: WindowRenderTarget,
 
     global_uniforms: GlobalUniforms,
@@ -48,39 +53,11 @@ pub struct RenderClient {
 
     pub squares_pipeline: Option<SquaresPipeline>,
     pub block_group_pipeline: Option<BlockGroupPipeline>,
-
-    // TODO: Actually, maybe the render client shouldn't be the one holding the GPU connection...
-    // `Application` might do it instead.
-    gpu: Gpu,
 }
 
 impl RenderClient {
     /// Creates a new render client holding onto a window.
-    pub async fn new(window: Arc<Window>) -> Self {
-        // First we connect to the GPU.
-        let instance = Instance::new(InstanceDescriptor::new_without_display_handle());
-        // We create a surface from the window which we'll render to.
-        let surface = instance.create_surface(window.clone()).unwrap();
-        // We request an adapter compatible with the surface.
-        let adapter = instance
-            .request_adapter(&RequestAdapterOptions {
-                compatible_surface: Some(&surface),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let surface_capabilities = surface.get_capabilities(&adapter);
-        let surface_format = surface_capabilities.formats[0];
-
-        // And here we get out GPU connections.
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
-            .await
-            .unwrap();
-
-        let gpu = Gpu { device, queue };
-
+    pub async fn new(gpu: &Gpu, render_target: WindowRenderTarget) -> Self {
         // We create an empty uniform buffer (we'll write to it before rendering for the first time, dw!)
         let global_uniform_buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Cluster Uniform Buffer"),
@@ -89,13 +66,8 @@ impl RenderClient {
             mapped_at_creation: false,
         });
 
-        let window_render_target =
-            WindowRenderTarget::new(window.inner_size(), surface, surface_format, &gpu.device);
-
         Self {
-            window,
-            window_render_target,
-            gpu,
+            window_render_target: render_target,
             global_uniforms: GlobalUniforms::default(),
             global_uniform_buffer,
             universe_render_view: None,
@@ -107,9 +79,9 @@ impl RenderClient {
 
     /// Changes the size of the render target
     /// TODO: In the future, `RenderClient` won't hold onto a single render target.
-    pub fn resize(&mut self, new_size: UVec2) {
+    pub fn resize(&mut self, gpu: &Gpu, new_size: UVec2) {
         self.window_render_target
-            .resize(&self.gpu.device, PhysicalSize::new(new_size.x, new_size.y));
+            .resize(&gpu.device, PhysicalSize::new(new_size.x, new_size.y));
 
         // TODO: Resize the layers in the GUI pipeline, yeah!
         // will look like `self.squares_pipeline.resize(&self.gpu.device, new_size)`;
@@ -131,12 +103,12 @@ impl RenderClient {
             view_matrix: c.view_matrix(new_size).to_cols_array(),
             ..self.global_uniforms
         };
-        self.sync_uniforms();
+        self.sync_uniforms(gpu);
     }
 
     /// Syncs the uniforms to the GPU!
-    pub fn sync_uniforms(&self) {
-        self.gpu.queue.write_buffer(
+    pub fn sync_uniforms(&self, gpu: &Gpu) {
+        gpu.queue.write_buffer(
             &self.global_uniform_buffer,
             0,
             bytemuck::cast_slice(&[self.global_uniforms]),
@@ -144,7 +116,8 @@ impl RenderClient {
     }
 
     /// Creates render views from a client's view of a world.
-    pub fn prepare_from_scratch(&mut self, game_view: &GameView) {
+    #[deprecated]
+    pub fn prepare_from_scratch(&mut self, gpu: &Gpu, game_view: &GameView) {
         let s = info_span!("render client preparing from scratch");
         let _ = s.enter();
 
@@ -156,7 +129,7 @@ impl RenderClient {
         /* Creating 2D information!!! */
 
         self.squares_pipeline = Some(SquaresPipeline::new(
-            &self.gpu,
+            &gpu,
             self.window_render_target.surface_config.format,
             screen_size,
         ));
@@ -166,8 +139,8 @@ impl RenderClient {
         info!("Creating bind group layout.");
         // It's possible to create these only once for ever I'm sure.
 
-        let universe_bind_group_layout = UniverseRenderView::bind_group_layout(&self.gpu);
-        let block_group_bind_group_layout = BlockGroupRenderView::bind_group_layout(&self.gpu);
+        let universe_bind_group_layout = UniverseRenderView::bind_group_layout(&gpu);
+        let block_group_bind_group_layout = BlockGroupRenderView::bind_group_layout(&gpu);
 
         // TODO: Get the camera from somewhere else lol.
         let c = Camera {
@@ -187,7 +160,7 @@ impl RenderClient {
             global_time: 0.0,
             _padding: [0.0; 3],
         };
-        self.sync_uniforms();
+        self.sync_uniforms(gpu);
 
         info!("Creating render views!");
         // These will be createed once but should be able to be updated incrementally
@@ -197,13 +170,13 @@ impl RenderClient {
         // and then progressively send data to the gpu in another thread.
 
         let universe_render_view = UniverseRenderView::new(
-            &self.gpu,
+            &gpu,
             &self.global_uniform_buffer,
             &game_view.current_universe,
             &universe_bind_group_layout,
         );
         let current_scene_render_view = SceneRenderView::new(
-            &self.gpu,
+            &gpu,
             &game_view.current_scene,
             &block_group_bind_group_layout,
         );
@@ -212,7 +185,7 @@ impl RenderClient {
         self.current_scene_render_view = Some(current_scene_render_view);
 
         self.block_group_pipeline = Some(BlockGroupPipeline::new(
-            &self.gpu.device,
+            &gpu.device,
             self.window_render_target.surface_config.format,
             universe_bind_group_layout,
             block_group_bind_group_layout,
@@ -220,7 +193,7 @@ impl RenderClient {
     }
 
     /// Draws onto the render target!
-    pub fn draw(&mut self) {
+    pub fn draw(&mut self, gpu: &Gpu) {
         let s = info_span!("render client draw");
         let _ = s.enter();
 
@@ -231,7 +204,7 @@ impl RenderClient {
             .expect("Couldn't get target texture view");
 
         // The command encoder, our beloved, is how we schedule commands to be sent to the GPU.
-        let mut command_encoder = self.gpu.device.create_command_encoder(&Default::default());
+        let mut command_encoder = gpu.device.create_command_encoder(&Default::default());
 
         let mut _render_pass = self.create_render_pass(&mut command_encoder, &texture_view_set);
 
@@ -274,9 +247,7 @@ impl RenderClient {
         drop(_render_pass);
 
         // Send all commands to the GPU.
-        self.gpu
-            .queue
-            .submit(std::iter::once(command_encoder.finish()));
+        gpu.queue.submit(std::iter::once(command_encoder.finish()));
 
         // TODO: In the future, presenting should be handled at by the caller of this function.
         if let Some(surface_texture) = texture_view_set.surface {

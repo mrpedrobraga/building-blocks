@@ -6,12 +6,18 @@ use std::{
 use glam::UVec2;
 use tracing::{info, info_span};
 use winit::{
-    application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, event_loop::EventLoop,
-    window::WindowAttributes,
+    application::ApplicationHandler,
+    dpi::PhysicalSize,
+    event::WindowEvent,
+    event_loop::EventLoop,
+    window::{Window, WindowAttributes},
 };
 
 use crate::{
-    client::{gui::render::RenderClient, GameView, GuiClient},
+    client::{
+        gui::render::{render_target::WindowRenderTarget, Gpu, RenderClient},
+        GameView, GuiClient,
+    },
     universe::World,
 };
 
@@ -25,6 +31,8 @@ pub struct Application<'app> {
 }
 
 pub struct ApplicationState {
+    gpu: Gpu,
+    pub window: Arc<Window>,
     pub render_client: RenderClient,
     // TODO: Maybe move these to the RenderClient itself,
     // and in the application just call `RenderClient::tick`
@@ -49,21 +57,50 @@ impl ApplicationState {
             )
             .expect("Failed to create application window!");
         let window = Arc::new(window);
-        let mut render_client = pollster::block_on(RenderClient::new(window));
+
+        // First we connect to the GPU.
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        // We create a surface from the window which we'll render to.
+        let surface = instance.create_surface(window.clone()).unwrap();
+        // We request an adapter compatible with the surface.
+        let adapter = smol::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            compatible_surface: Some(&surface),
+            ..Default::default()
+        }))
+        .unwrap();
+
+        let surface_capabilities = surface.get_capabilities(&adapter);
+        let surface_format = surface_capabilities.formats[0];
+
+        // And here we get out GPU connections.
+        let (device, queue) =
+            smol::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
+        let gpu = smol::block_on(Gpu::new(device, queue));
+
+        let render_target =
+            WindowRenderTarget::new(window.inner_size(), surface, surface_format, &gpu.device);
+
+        let render_client = pollster::block_on(RenderClient::new(&gpu, render_target));
 
         info!("Gathering information from the server...");
 
         info!("All done, let's run the app now!");
 
         Self {
+            window,
             render_client,
             time_of_creation: Instant::now(),
             time_of_last_tick: Instant::now(),
             frame_time_accumulator: Duration::from_millis(0),
+            gpu,
         }
     }
 
-    fn prepare_from_scratch_for_server(render_client: &mut RenderClient, client: &mut GuiClient) {
+    fn prepare_from_scratch_for_server(
+        &self,
+        render_client: &mut RenderClient,
+        client: &mut GuiClient,
+    ) {
         if let Some(server) = &client.server_adapter {
             // TODO: Stream resources from the server on another thread
             // so we don't lag while waiting for resources.
@@ -85,7 +122,7 @@ impl ApplicationState {
             };
 
             // TODO: Introduce granular updates to the content of the render client.
-            render_client.prepare_from_scratch(&game_view);
+            render_client.prepare_from_scratch(&self.gpu, &game_view);
 
             client.game_resources = Some(game_view);
         } else {
@@ -132,7 +169,10 @@ impl<'app> ApplicationHandler for Application<'app> {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        let Some(ApplicationState { render_client, .. }) = &mut self.state else {
+        let Some(ApplicationState {
+            render_client, gpu, ..
+        }) = &mut self.state
+        else {
             return;
         };
 
@@ -141,9 +181,9 @@ impl<'app> ApplicationHandler for Application<'app> {
                 event_loop.exit();
             }
             WindowEvent::Resized(physical_size) => {
-                render_client.resize(UVec2::new(physical_size.width, physical_size.height));
+                render_client.resize(gpu, UVec2::new(physical_size.width, physical_size.height));
             }
-            WindowEvent::RedrawRequested => render_client.draw(),
+            WindowEvent::RedrawRequested => render_client.draw(gpu),
 
             _ => {}
         }
@@ -179,6 +219,6 @@ impl<'app> ApplicationHandler for Application<'app> {
         }
 
         // Still requesting to draw as fast as the GPU will allow...
-        state.render_client.window.request_redraw();
+        state.window.request_redraw();
     }
 }
