@@ -3,17 +3,16 @@
 //! Traits and structs for clients which are a player's way of interacting with a universe.
 
 use crate::{
-    client::gui::Application,
-    server::{ClientMetadata, ServerAdapter},
+    server::{ClientInfo, ServerAdapter},
     universe::{Scene, Universe, World},
 };
 
 pub mod gui;
 
 pub trait Client {
-    fn try_connect<S: ServerAdapter + 'static>(&mut self, server: S) -> Result<(), ()>;
+    fn install_adapter<S: ServerAdapter + 'static>(&mut self, server: S) -> Result<(), ()>;
 
-    fn metadata(&self) -> ClientMetadata;
+    fn metadata(&self) -> ClientInfo;
 }
 
 pub struct GameView {
@@ -31,12 +30,12 @@ impl DummyClient {
 }
 
 impl Client for DummyClient {
-    fn try_connect<S: ServerAdapter>(&mut self, #[expect(unused)] server: S) -> Result<(), ()> {
+    fn install_adapter<S: ServerAdapter>(&mut self, #[expect(unused)] server: S) -> Result<(), ()> {
         Ok(())
     }
 
-    fn metadata(&self) -> ClientMetadata {
-        ClientMetadata {}
+    fn metadata(&self) -> ClientInfo {
+        ClientInfo {}
     }
 }
 
@@ -55,28 +54,10 @@ impl GuiClient {
             game_resources: None,
         }
     }
-
-    /// Runs the application.
-    ///
-    /// Technically, all you need to run such a client is this:
-    ///
-    /// ```rust
-    /// DefaultClient::new().run()
-    /// ```
-    ///
-    /// Though you can call functions on the client before calling run, for example, you might
-    /// preemptively connect to some server.
-    ///
-    /// ## Multi-threading
-    ///
-    /// Pretty please call this on the main thread (winit needs this).
-    pub fn run(&mut self) {
-        Application::run(self);
-    }
 }
 
 impl Client for GuiClient {
-    fn try_connect<S: ServerAdapter + 'static>(
+    fn install_adapter<S: ServerAdapter + 'static>(
         &mut self,
         #[allow(unused)] server_adapter: S,
     ) -> Result<(), ()> {
@@ -84,7 +65,7 @@ impl Client for GuiClient {
         Ok(())
     }
 
-    fn metadata(&self) -> ClientMetadata {
-        ClientMetadata {}
+    fn metadata(&self) -> ClientInfo {
+        ClientInfo {}
     }
 }

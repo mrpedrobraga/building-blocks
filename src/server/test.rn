@@ -1,0 +1,37 @@
+/// Called by the engine to get the server instance.
+pub fn setup() {
+    Server::new("My Rune Server")
+}
+
+struct Server {
+    server_name,
+    player_count,
+}
+
+impl Server {
+    fn new(name) {
+        Server {
+            server_name: name,
+            player_count: 0,
+        }
+    }
+}
+
+impl Server {
+    fn started(self) {
+        println!("Hello World from {}", self.server_name);
+    }
+
+    fn client_requested_connection(self, request) {
+        self.player_count += 1;
+        
+        #{
+            status: true,
+            name: format!("Player #{}", self.player_count.to_string()),
+        }
+    }
+
+    fn debug(self) {
+        println!("Player Count = {}", self.player_count)
+    }
+}

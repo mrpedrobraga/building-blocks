@@ -1,8 +1,7 @@
 use glam::UVec2;
 use image::{EncodableLayout, Rgba};
 use wgpu::{
-    include_wgsl, util::DeviceExt, Extent3d, PipelineLayout, PrimitiveState, RenderPipeline,
-    TextureFormat,
+    include_wgsl, util::DeviceExt, PipelineLayout, PrimitiveState, RenderPipeline, TextureFormat,
 };
 
 use crate::client::gui::render::Gpu;

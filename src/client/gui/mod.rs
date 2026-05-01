@@ -53,8 +53,6 @@ impl ApplicationState {
 
         info!("Gathering information from the server...");
 
-        ApplicationState::prepare_from_scratch_for_server(&mut render_client, client);
-
         info!("All done, let's run the app now!");
 
         Self {
@@ -69,7 +67,9 @@ impl ApplicationState {
         if let Some(server) = &client.server_adapter {
             // TODO: Stream resources from the server on another thread
             // so we don't lag while waiting for resources.
-            let universe = server.get_universe().unwrap();
+            let universe = server
+                .get_universe()
+                .expect("Couldn't get universe from server adapter.");
 
             // So, we're creating a dummy world here...
             //

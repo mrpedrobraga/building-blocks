@@ -37,6 +37,10 @@ Blocks and their textures, sounds, behaviours are data-driven and scriptable.
 - [ ] Block brushes;
 - [ ] Context aware tools (extrude connected blocks like walls, furniture, carpets, etc, with gizmos);
 
+### From Picotron
+
+- [ ] Scripting language based pixels layers for 2D and GUI rendering;
+
 ### Other
 
 - [X] Fully data driven blocks;
