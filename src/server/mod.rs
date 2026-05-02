@@ -1,18 +1,43 @@
+#![allow(unused)]
 //! # Server
 //!
 //! Contains traits for the "host" of a universe and worlds where players (clients) can all play together :-)
 
-use crate::{data_packs::Universe, messaging::server::ServerMessage};
-use std::sync::{
-    mpsc::{Receiver, Sender},
-    Arc,
+use crate::{
+    data_packs::Universe,
+    messaging::server::{ServerConnectionMessage, ServerMessage},
 };
-use tracing::{info, info_span};
+use std::{
+    collections::HashMap,
+    sync::{
+        mpsc::{Receiver, Sender},
+        Arc,
+    },
+};
+use tracing::info_span;
 
 /// See the module-level documentation.
 pub struct UniverseServer {
     pub universe: Universe,
     pub scripting: Scripting,
+    pub clients: HashMap<ClientInfo, ClientInterface>,
+}
+
+pub struct ClientInterface {
+    client_msg_rx: Receiver<ClientRequest>,
+    server_msg_tx: Sender<ServerMessage>,
+}
+
+impl ClientInterface {
+    pub fn new(
+        client_msg_rx: Receiver<ClientRequest>,
+        server_msg_tx: Sender<ServerMessage>,
+    ) -> Self {
+        Self {
+            client_msg_rx,
+            server_msg_tx,
+        }
+    }
 }
 
 impl UniverseServer {
@@ -22,22 +47,34 @@ impl UniverseServer {
         Self {
             universe,
             scripting,
+            clients: HashMap::new(),
         }
     }
 
-    pub async fn run(self: Arc<Self>) {
+    pub async fn run(self) {
         let s = info_span!("server");
         let _ = s.enter();
-
-        info!("Server running!")
     }
 
     /// Requests this server accepts a client.
-    pub fn request_client_connection(&mut self, _client_metadata: ClientInfo) -> Result<(), ()> {
-        let mut vm = rune::Vm::new(self.scripting.runtime.clone(), self.scripting.unit.clone());
+    pub fn request_client_connection(
+        &mut self,
+        client_metadata: ClientInfo,
+        client_interface: ClientInterface,
+    ) -> Result<(), ()> {
+        // let mut vm = rune::Vm::new(self.scripting.runtime.clone(), self.scripting.unit.clone());
 
-        vm.call(["Server", "client_requested_connection"], ((), ()))
-            .unwrap();
+        // vm.call(["Server", "client_requested_connection"], ((), ()))
+        //     .unwrap();
+
+        client_interface
+            .server_msg_tx
+            .send(ServerMessage::Connection(
+                ServerConnectionMessage::Connect {},
+            ))
+            .expect("Failed to send connection message to client!");
+
+        self.clients.insert(client_metadata, client_interface);
 
         Ok(())
     }
@@ -94,7 +131,7 @@ impl Scripting {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClientInfo {}
 
 /// A client does not hold an instance of [Server] directly.
@@ -104,7 +141,7 @@ pub struct ClientInfo {}
 pub trait ServerAdapter {
     fn request_connection(&mut self, client: ClientInfo) -> Result<(), ()>;
 
-    fn get_universe(&self) -> Result<Universe, ()>;
+    fn next_message(&self) -> Result<ServerMessage, ()>;
 }
 
 #[derive(Debug)]
@@ -132,8 +169,8 @@ impl ServerAdapter for LocalServerInterface {
         Ok(())
     }
 
-    fn get_universe(&self) -> Result<Universe, ()> {
-        Err(())
+    fn next_message(&self) -> Result<ServerMessage, ()> {
+        self.client_channels.1.recv().map_err(|_| ())
     }
 }
 
@@ -147,7 +184,7 @@ impl ServerAdapter for RemoteServer {
         Err(())
     }
 
-    fn get_universe(&self) -> Result<Universe, ()> {
+    fn next_message(&self) -> Result<ServerMessage, ()> {
         Err(())
     }
 }

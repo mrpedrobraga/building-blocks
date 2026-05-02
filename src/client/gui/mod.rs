@@ -18,7 +18,7 @@ use crate::{
         gui::render::{render_target::WindowRenderTarget, Gpu, RenderClient},
         GameView, GuiClient, GuiMessage,
     },
-    data_packs::World,
+    data_packs::{Universe, World},
 };
 
 pub mod render;
@@ -106,9 +106,7 @@ impl ApplicationState {
         if let Some(server) = &client.server_adapter {
             // TODO: Stream resources from the server on another thread
             // so we don't lag while waiting for resources.
-            let universe = server
-                .get_universe()
-                .expect("Couldn't get universe from server adapter.");
+            let universe = Universe::example();
 
             // So, we're creating a dummy world here...
             //
@@ -191,9 +189,8 @@ impl ApplicationHandler for Application {
             }
             event => {
                 // TODO: Think about this better.
-                self.gui_message_tx
-                    .send(GuiMessage::WindowEvent(event))
-                    .expect("Failed to send window event to client?");
+                let _ = self.gui_message_tx.send(GuiMessage::WindowEvent(event));
+                //.expect("Failed to send window event to client?");
             }
         }
     }

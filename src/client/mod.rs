@@ -4,6 +4,8 @@
 
 use std::sync::mpsc::Receiver;
 
+use tracing::{info, info_span};
+
 use crate::{
     data_packs::{Scene, Universe, World},
     server::{ClientInfo, ServerAdapter},
@@ -63,6 +65,15 @@ impl GuiClient {
             server_adapter: None,
             game_resources: None,
             app_msg_rx: Some(app_msg_rx),
+        }
+    }
+
+    pub fn run(&mut self) {
+        let s = info_span!("client");
+        let _ = s.enter();
+
+        if let Ok(message) = self.server_adapter.as_ref().unwrap().next_message() {
+            info!("[Client] Message from server --- {:?}", message);
         }
     }
 }
