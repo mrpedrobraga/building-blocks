@@ -13,21 +13,34 @@
 use glam::{Affine3A, UVec3, UVec4, Vec2};
 use serde::{Deserialize, Serialize};
 
+use crate::{
+    data_packs::definitions::Identifiable,
+    models::{BlockAppearance, BlockTypeDefinition},
+};
+
 /// Information about what a given block "is":
 /// Its appearance, general information and physics;
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlockDefinition {
+pub struct BlockType {
+    pub id: String,
     pub display_name: String,
     pub appearance: BlockAppearance,
 }
 
-/// The appearance of a block.
-///
-/// TODO: Allow blocks to have non-cuboid appearances!
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlockAppearance {
-    /// TODO: Materials will be stored in the universe and loaded from a folder, too.
-    pub material: PerFace<RenderMaterial>,
+impl Identifiable for BlockType {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+}
+
+impl BlockType {
+    pub fn from_definition(definition: &BlockTypeDefinition) -> Self {
+        Self {
+            id: definition.id.clone(),
+            display_name: definition.display_name.clone(),
+            appearance: definition.appearance.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

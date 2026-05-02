@@ -1,0 +1,14 @@
+BlockDefinition(
+    id: "toyvox:dirt",
+    display_name: "Dirt",
+    appearance: BlockAppearance(
+        material: (
+            x_min: MaterialRef("toyvox:dirt"),
+            x_max: MaterialRef("toyvox:dirt"),
+            y_min: MaterialRef("toyvox:dirt"),
+            y_max: MaterialRef("toyvox:dirt"),
+            z_min: MaterialRef("toyvox:dirt"),
+            z_max: MaterialRef("toyvox:dirt"),
+        ),
+    ),
+)

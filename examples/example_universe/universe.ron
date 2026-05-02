@@ -1,4 +1,13 @@
 UniverseDefinition (
     id: "toyvox",
-    display_name: "Default Universe"
+    display_name: "Default Universe",
+    data_packs: [
+        Local("./packs/toyvox-default"),
+
+        // Remote dependencies look like this:
+        //
+        // Git("mrpedrobraga/toyvox-default"),
+        //
+        // They will be cached locally so yeah.
+    ]
 )

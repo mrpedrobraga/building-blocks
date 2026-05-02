@@ -3,62 +3,68 @@ use std::path::PathBuf;
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
-/// Defines that a universe exists in a folder.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UniverseDefinition {
-    id: String,
-    display_name: String,
-}
-
-/// Defines that a world exists in a folder.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorldDefinition {
-    id: String,
-    display_name: String,
-}
+use crate::data_packs::definitions::Identifiable;
 
 /// Defines a new material!
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialDefinition {
-    id: String,
-    display_name: String,
-    albedo: TextureRef,
+    pub id: String,
+    pub display_name: String,
+    pub albedo: TextureRef,
+}
+
+impl Identifiable for MaterialDefinition {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
 }
 
 /// Refers to an existing loaded texture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialRef {
-    id: String,
+    pub id: String,
 }
 
 /// Defines a new texture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextureDefinition {
-    id: String,
-    display_name: String,
-    source: PathBuf,
+    pub id: String,
+    pub display_name: String,
+    pub source: PathBuf,
+}
+
+impl Identifiable for TextureDefinition {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
 }
 
 /// Refers to an existing loaded texture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextureRef {
-    id: String,
-    rect: Option<Rect>,
+    pub id: String,
+    pub rect: Option<Rect>,
 }
 
 /// A humble rectangle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Rect {
-    position: Vec2,
-    size: Vec2,
+    pub position: Vec2,
+    pub size: Vec2,
 }
 
 /// Defines a new voxel!
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockTypeDefinition {
-    id: String,
-    display_name: String,
-    appearance: BlockAppearance,
+    pub id: String,
+    pub display_name: String,
+    pub appearance: BlockAppearance,
+}
+
+impl Identifiable for BlockTypeDefinition {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
 }
 
 /// Defines the appearance of a voxel...

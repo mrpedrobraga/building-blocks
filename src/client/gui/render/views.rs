@@ -3,7 +3,9 @@ use image::{EncodableLayout, ImageBuffer, Rgba};
 use wgpu::{util::DeviceExt, BindGroupLayoutEntry};
 
 use crate::{
-    client::gui::render::Gpu, data_packs::Universe, world::block::BlockGroup, world::Scene,
+    client::gui::render::Gpu,
+    data_packs::Universe,
+    world::{block::BlockGroup, Scene},
 };
 
 /// A [`RenderClient`]'s "view" of a universe,
@@ -28,13 +30,37 @@ impl UniverseRenderView {
         // TODO: Send more complex appearances to the GPU, yeah!
         // Right now we are only sending materials and assuming
         // every block uses that material all over.
-        let block_definition_appearances: Vec<RenderMaterialView> = universe
-            .block_definitions
+        let textures = universe.textures_cloned();
+        let materials = universe.materials_cloned();
+
+        let block_definition_materials: Vec<RenderMaterialView> = universe
+            .block_types()
             .iter()
-            .map(|(_, x)| x.appearance.material.x_max.clone())
-            .map(|x| RenderMaterialView {
-                atlas_position: x.atlas_position,
-                atlas_size: x.atlas_size,
+            .filter_map(|block_type| match &block_type.appearance {
+                // TODO: Properly support these cuboid materials!
+                crate::models::BlockAppearance::Cuboid { x_min, .. } => Some(x_min),
+            })
+            .map(|material_ref| {
+                materials
+                    .iter()
+                    .find(|material| material.id == material_ref.id)
+            })
+            .filter_map(|x| x)
+            .map(|material| {
+                let rect = material
+                    .albedo
+                    .rect
+                    .as_ref()
+                    .expect("No rect provided for texture ref?");
+                // TODO: Use the texture as well as the texture size
+                // in the rendermaterialview information.
+                let _texture = textures.iter().find(|tex| tex.id == material.albedo.id);
+
+                RenderMaterialView {
+                    // TODO: Texture index since more than one texture can be provided.
+                    atlas_position: rect.position,
+                    atlas_size: rect.size,
+                }
             })
             .collect();
 
@@ -42,7 +68,7 @@ impl UniverseRenderView {
             gpu.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Block Definition Appearances Buffer"),
-                    contents: bytemuck::cast_slice(&block_definition_appearances),
+                    contents: bytemuck::cast_slice(&block_definition_materials),
                     usage: wgpu::BufferUsages::STORAGE,
                 });
 
@@ -109,7 +135,7 @@ impl UniverseRenderView {
         });
 
         UniverseRenderView {
-            block_definition_appearances,
+            block_definition_appearances: block_definition_materials,
             block_definition_appearances_gpu,
             material_texture_atlas: texture_atlas,
             material_texture_atlas_gpu: texture_atlas_gpu,

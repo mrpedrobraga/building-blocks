@@ -1,0 +1,4 @@
+DataPackDefinition (
+    id: "toyvox-default",
+    display_name: "Default Toyvox Data Pack"
+)
