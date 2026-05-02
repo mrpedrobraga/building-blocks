@@ -7,8 +7,9 @@ use std::sync::mpsc::Receiver;
 use tracing::{info, info_span};
 
 use crate::{
-    data_packs::{Scene, Universe, World},
+    data_packs::Universe,
     server::{ClientInfo, ServerAdapter},
+    world::{Scene, World},
 };
 
 pub mod gui;

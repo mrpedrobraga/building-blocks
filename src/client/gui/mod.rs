@@ -18,7 +18,8 @@ use crate::{
         gui::render::{render_target::WindowRenderTarget, Gpu, RenderClient},
         GameView, GuiClient, GuiMessage,
     },
-    data_packs::{Universe, World},
+    data_packs::Universe,
+    world::World,
 };
 
 pub mod render;

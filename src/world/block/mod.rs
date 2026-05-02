@@ -13,6 +13,8 @@
 use glam::{Affine3A, UVec3, UVec4, Vec2};
 use serde::{Deserialize, Serialize};
 
+/// Information about what a given block "is":
+/// Its appearance, general information and physics;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockDefinition {
     pub display_name: String,

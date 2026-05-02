@@ -7,8 +7,8 @@
 //! Instead you install "data packs" that add block and object definitions and build with them, on top of the engine
 //! that handles rendering, input, audio, networking, cross-platformness, etc, for you.
 
-/// Anything to do with blocks or block groups!
-pub mod block;
+/// Anything to do with the beautiful worlds you can create!
+pub mod world;
 
 /// Things to do with data packs and the resources worldmakers can "make" their "worlds" with!
 pub mod data_packs;

@@ -3,9 +3,7 @@ use image::{EncodableLayout, ImageBuffer, Rgba};
 use wgpu::{util::DeviceExt, BindGroupLayoutEntry};
 
 use crate::{
-    block::BlockGroup,
-    client::gui::render::Gpu,
-    data_packs::{Scene, Universe},
+    client::gui::render::Gpu, data_packs::Universe, world::block::BlockGroup, world::Scene,
 };
 
 /// A [`RenderClient`]'s "view" of a universe,
