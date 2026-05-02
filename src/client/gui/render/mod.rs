@@ -4,12 +4,10 @@
 //! and the current world it's rendering. Those are usually pulled from a server currently running a game,
 //! but not necessarily — you can render a universe and a world created out of thin air, or snapshots of one loaded from a file.
 
-use std::sync::Arc;
-
 use glam::{UVec2, Vec3};
 use tracing::{info, info_span};
 use wgpu::{Device, Queue};
-use winit::{dpi::PhysicalSize, window::Window};
+use winit::dpi::PhysicalSize;
 
 use crate::client::{
     gui::render::{

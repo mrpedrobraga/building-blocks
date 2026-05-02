@@ -24,11 +24,6 @@ impl Server {
 
     fn client_requested_connection(self, request) {
         self.player_count += 1;
-        
-        #{
-            status: true,
-            name: format!("Player #{}", self.player_count.to_string()),
-        }
     }
 
     fn debug(self) {

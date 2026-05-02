@@ -2,7 +2,7 @@
 //!
 //! Contains traits for the "host" of a universe and worlds where players (clients) can all play together :-)
 
-use crate::universe::Universe;
+use crate::{data_packs::Universe, messaging::server::ServerMessage};
 use std::sync::{
     mpsc::{Receiver, Sender},
     Arc,
@@ -112,23 +112,18 @@ pub enum ClientRequest {
     Connect,
 }
 
-#[derive(Debug)]
-pub enum ServerResponse {
-    Connection { status: bool },
-}
-
 /// A server that's "right here" in the same machine and process as the client.
-pub struct LocalServer {
-    client_channels: (Sender<ClientRequest>, Receiver<ServerResponse>),
+pub struct LocalServerInterface {
+    client_channels: (Sender<ClientRequest>, Receiver<ServerMessage>),
 }
 
-impl LocalServer {
-    pub fn new(client_channels: (Sender<ClientRequest>, Receiver<ServerResponse>)) -> Self {
-        LocalServer { client_channels }
+impl LocalServerInterface {
+    pub fn new(client_channels: (Sender<ClientRequest>, Receiver<ServerMessage>)) -> Self {
+        LocalServerInterface { client_channels }
     }
 }
 
-impl ServerAdapter for LocalServer {
+impl ServerAdapter for LocalServerInterface {
     fn request_connection(&mut self, _client: ClientInfo) -> Result<(), ()> {
         self.client_channels
             .0

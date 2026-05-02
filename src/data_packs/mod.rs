@@ -7,20 +7,17 @@ use generational_arena::Arena;
 use glam::{Affine3A, UVec3, Vec2, Vec3};
 use indexmap::IndexMap;
 
-use crate::{
-    block::{Block, BlockAppearance, BlockDefinition, BlockGroup, PerFace, RenderMaterial},
-    Id,
-};
+use crate::block::{Block, BlockAppearance, BlockDefinition, BlockGroup, PerFace, RenderMaterial};
 
 /// See the module-level documentation.
 #[derive(Clone)]
 pub struct Universe {
-    pub block_definitions: IndexMap<Id, BlockDefinition>,
+    pub block_definitions: IndexMap<String, BlockDefinition>,
 }
 
 /// A World is a collection of scenes plus some metadata.
 pub struct World {
-    pub scenes: IndexMap<Id, Scene>,
+    pub scenes: IndexMap<String, Scene>,
 }
 
 /// A scene is a root layout plus some environment data!
@@ -45,7 +42,7 @@ pub struct Layout {
 
 impl Universe {
     pub fn example() -> Self {
-        let mut block_definitions: IndexMap<Id, BlockDefinition> = IndexMap::new();
+        let mut block_definitions: IndexMap<String, BlockDefinition> = IndexMap::new();
 
         block_definitions.insert(
             "dirt".to_string(),
@@ -74,6 +71,13 @@ impl Universe {
         );
 
         Universe { block_definitions }
+    }
+
+    pub fn block_definitions(&self) -> Vec<BlockDefinition> {
+        self.block_definitions
+            .iter()
+            .map(|(_, bd)| bd.clone())
+            .collect::<Vec<_>>()
     }
 }
 

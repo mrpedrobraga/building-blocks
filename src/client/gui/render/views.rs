@@ -5,7 +5,7 @@ use wgpu::{util::DeviceExt, BindGroupLayoutEntry};
 use crate::{
     block::BlockGroup,
     client::gui::render::Gpu,
-    universe::{Scene, Universe},
+    data_packs::{Scene, Universe},
 };
 
 /// A [`RenderClient`]'s "view" of a universe,

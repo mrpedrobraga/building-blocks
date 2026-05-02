@@ -1,9 +1,11 @@
+#![allow(unused)]
+
 use std::sync::{mpsc, Arc};
 
 use building_blocks::{
     client::{gui::Application, Client, GuiClient},
-    server::{ClientInfo, LocalServer, ServerAdapter, UniverseServer},
-    universe::Universe,
+    data_packs::Universe,
+    server::{ClientInfo, LocalServerInterface, ServerAdapter, UniverseServer},
 };
 
 fn main() {
@@ -12,26 +14,22 @@ fn main() {
     let (client_msg_tx, client_msg_rx) = mpsc::channel();
     let (server_msg_tx, server_msg_rx) = mpsc::channel();
 
+    let (app_msg_tx, app_msg_rx) = mpsc::channel();
+
     std::thread::spawn(|| {
         let universe = Universe::example();
         let server = UniverseServer::new(universe);
         let server = Arc::new(server);
-
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        rt.block_on(async {
+        smol::block_on(async {
             server.run().await;
         });
     });
 
-    let mut adapter = LocalServer::new((client_msg_tx, server_msg_rx));
-    let mut client = GuiClient::new();
+    let mut adapter = LocalServerInterface::new((client_msg_tx, server_msg_rx));
+    let mut client = GuiClient::new(app_msg_rx);
     adapter
         .request_connection(ClientInfo {})
         .expect("Failed sending connection request.\nUnderstand — the server didn't 'reject' the client per se, the request failed to reach it altogether.");
     client.install_adapter(adapter).unwrap();
-    Application::run(&mut client);
+    Application::new(app_msg_tx).run();
 }

@@ -2,9 +2,11 @@
 //!
 //! Traits and structs for clients which are a player's way of interacting with a universe.
 
+use std::sync::mpsc::Receiver;
+
 use crate::{
+    data_packs::{Scene, Universe, World},
     server::{ClientInfo, ServerAdapter},
-    universe::{Scene, Universe, World},
 };
 
 pub mod gui;
@@ -45,13 +47,22 @@ impl Client for DummyClient {
 pub struct GuiClient {
     server_adapter: Option<Box<dyn ServerAdapter>>,
     pub game_resources: Option<GameView>,
+    pub app_msg_rx: Option<Receiver<GuiMessage>>,
+}
+
+pub enum GuiMessage {
+    // TODO: Create a new bespoke event type? Maybe? Perhaps steal the type from `ui-composer`?
+    WindowEvent(winit::event::WindowEvent),
+    DeviceEvent(winit::event::DeviceEvent),
+    Redraw,
 }
 
 impl GuiClient {
-    pub fn new() -> Self {
+    pub fn new(app_msg_rx: Receiver<GuiMessage>) -> Self {
         Self {
             server_adapter: None,
             game_resources: None,
+            app_msg_rx: Some(app_msg_rx),
         }
     }
 }

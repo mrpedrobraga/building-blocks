@@ -1,5 +1,5 @@
 use std::{
-    sync::Arc,
+    sync::{mpsc::Sender, Arc},
     time::{Duration, Instant},
 };
 
@@ -16,17 +16,17 @@ use winit::{
 use crate::{
     client::{
         gui::render::{render_target::WindowRenderTarget, Gpu, RenderClient},
-        GameView, GuiClient,
+        GameView, GuiClient, GuiMessage,
     },
-    universe::World,
+    data_packs::World,
 };
 
 pub mod render;
 
-pub struct Application<'app> {
+pub struct Application {
     // TODO: Maybe use a less exclusive reference, like an Arc+Mutex?
     // Right now it's expected that the application has full control over the client, you see...
-    pub client: &'app mut GuiClient,
+    pub gui_message_tx: Sender<GuiMessage>,
     pub state: Option<ApplicationState>,
 }
 
@@ -43,7 +43,7 @@ pub struct ApplicationState {
 }
 
 impl ApplicationState {
-    fn new(client: &mut GuiClient, event_loop: &winit::event_loop::ActiveEventLoop) -> Self {
+    fn new(event_loop: &winit::event_loop::ActiveEventLoop) -> Self {
         let s = info_span!("application_state");
         let _ = s.enter();
 
@@ -96,6 +96,8 @@ impl ApplicationState {
         }
     }
 
+    #[deprecated]
+    #[allow(unused)]
     fn prepare_from_scratch_for_server(
         &self,
         render_client: &mut RenderClient,
@@ -122,6 +124,7 @@ impl ApplicationState {
             };
 
             // TODO: Introduce granular updates to the content of the render client.
+            #[allow(deprecated)]
             render_client.prepare_from_scratch(&self.gpu, &game_view);
 
             client.game_resources = Some(game_view);
@@ -135,31 +138,30 @@ impl ApplicationState {
     }
 }
 
-impl<'app> Application<'app> {
-    pub fn new(client: &'app mut GuiClient) -> Self {
+impl Application {
+    pub fn new(gui_message_tx: Sender<GuiMessage>) -> Self {
         Application {
-            client,
+            gui_message_tx,
             state: None,
         }
     }
 
-    pub fn run(client: &'app mut GuiClient) {
+    pub fn run(&mut self) {
         let s = info_span!("application");
         let _ = s.enter();
 
         info!("Initialized.");
 
-        let mut app = Application::new(client);
-        EventLoop::new().unwrap().run_app(&mut app).unwrap();
+        EventLoop::new().unwrap().run_app(self).unwrap();
 
         info!("Done.");
     }
 }
 
-impl<'app> ApplicationHandler for Application<'app> {
+impl ApplicationHandler for Application {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         if self.state.is_none() {
-            self.state = Some(ApplicationState::new(&mut self.client, event_loop));
+            self.state = Some(ApplicationState::new(event_loop));
         }
     }
 
@@ -183,9 +185,16 @@ impl<'app> ApplicationHandler for Application<'app> {
             WindowEvent::Resized(physical_size) => {
                 render_client.resize(gpu, UVec2::new(physical_size.width, physical_size.height));
             }
-            WindowEvent::RedrawRequested => render_client.draw(gpu),
-
-            _ => {}
+            WindowEvent::RedrawRequested => {
+                // TODO: Maybe send something like a "redraw" message?
+                render_client.draw(gpu)
+            }
+            event => {
+                // TODO: Think about this better.
+                self.gui_message_tx
+                    .send(GuiMessage::WindowEvent(event))
+                    .expect("Failed to send window event to client?");
+            }
         }
     }
 

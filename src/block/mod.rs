@@ -1,3 +1,15 @@
+//! # Blocks
+//!
+//! Blocks are the building... uh... well, the basic elements of creation in the world.
+//!
+//! The data format the engine uses works like this:
+//!
+//! - There are [`BlockDefinition`]s, which define what a block is, how it looks like, etc.
+//! - There are [`BlockGroup`]s, which are like Minecraft chunks, collections of data. Actually, they are more like Sable [sub-levels](https://modrinth.com/mod/sable), since they are able to have arbitrary size, rotation, and physics.
+//!
+//! Within BlockGroups, a block is represented by [`Block`], which contains an index into a global block palette. This makes storage really cheap.
+//! Since a Block is a 32-bit unsigned integer, this means you can have up to `4_294_967_296` different block types. This format will change soon in order to support more advanced kinds of blocks (such as proxy blocks!);
+
 use glam::{Affine3A, UVec3, UVec4, Vec2};
 use serde::{Deserialize, Serialize};
 

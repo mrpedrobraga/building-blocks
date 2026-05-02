@@ -325,7 +325,6 @@ dependencies = [
  "rune",
  "serde",
  "smol",
- "tokio",
  "tracing",
  "tracing-subscriber",
  "wgpu",
@@ -2372,15 +2371,6 @@ dependencies = [
  "arrayref",
  "bytemuck",
  "strict-num",
-]
-
-[[package]]
-name = "tokio"
-version = "1.52.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b67dee974fe86fd92cc45b7a95fdd2f99a36a6d7b0d431a231178d3d670bbcc6"
-dependencies = [
- "pin-project-lite",
 ]
 
 [[package]]
