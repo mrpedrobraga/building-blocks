@@ -7,20 +7,24 @@ use crate::{
     data_packs::Universe,
     messaging::server::{ServerConnectionMessage, ServerMessage},
 };
-use std::{
-    collections::HashMap,
-    sync::{
-        mpsc::{Receiver, Sender},
-        Arc,
-    },
-};
-use tracing::info_span;
+use futures::stream::SelectAll;
+use smol::channel::{Receiver, RecvError, Sender};
+use std::{collections::HashMap, sync::Arc};
+use tracing::{info, info_span};
 
 /// See the module-level documentation.
 pub struct UniverseServer {
     pub universe: Universe,
     pub scripting: Scripting,
     pub clients: HashMap<ClientInfo, ClientInterface>,
+    pub unknown_msg_stream: Receiver<UnknownMessage>,
+}
+
+pub enum UnknownMessage {
+    Connect {
+        meta: ClientInfo,
+        interface: ClientInterface,
+    },
 }
 
 pub struct ClientInterface {
@@ -41,38 +45,72 @@ impl ClientInterface {
 }
 
 impl UniverseServer {
-    pub fn new(universe: Universe) -> Self {
+    pub fn new(universe: Universe, unknown_msg_stream: Receiver<UnknownMessage>) -> Self {
         let scripting = Scripting::new();
 
         Self {
             universe,
             scripting,
             clients: HashMap::new(),
+            unknown_msg_stream,
         }
     }
 
-    pub async fn run(self) {
+    pub async fn run(mut self) {
         let s = info_span!("server");
         let _ = s.enter();
+
+        info!("[Server] Starting...");
+
+        // Need to receive messages from the clients and print them!
+
+        while let Ok(unknown_message) = self.unknown_msg_stream.recv().await {
+            match unknown_message {
+                UnknownMessage::Connect { meta, interface } => {
+                    // TODO: Actually take the client info into account!
+                    let _ = meta;
+                    info!("[Server] Client {:?} attempting to connect.", meta.id);
+                    interface
+                        .server_msg_tx
+                        .send(ServerMessage::Connection(
+                            ServerConnectionMessage::Connect {},
+                        ))
+                        .await
+                        .expect("Failed to send connection acknowledgement to client.");
+                    self.clients.insert(meta, interface);
+                }
+            }
+        }
+
+        info!("[Server] Done.")
     }
 
     /// Requests this server accepts a client.
-    pub fn request_client_connection(
+    pub async fn client_requesting_connection(
         &mut self,
         client_metadata: ClientInfo,
         client_interface: ClientInterface,
     ) -> Result<(), ()> {
-        // let mut vm = rune::Vm::new(self.scripting.runtime.clone(), self.scripting.unit.clone());
+        let s = info_span!("client requesting connection");
+        let _ = s.enter();
 
-        // vm.call(["Server", "client_requested_connection"], ((), ()))
-        //     .unwrap();
+        info!("Client Requesting Connection");
 
         client_interface
             .server_msg_tx
             .send(ServerMessage::Connection(
                 ServerConnectionMessage::Connect {},
             ))
-            .expect("Failed to send connection message to client!");
+            .await
+            .expect("Failed to send connection message back to client.");
+
+        client_interface.server_msg_tx.send(ServerMessage::World(
+            crate::messaging::server::ServerWorldMessage::EnterWorld {
+                id: "default".to_string(),
+            },
+        ));
+
+        info!("Client was accepted.");
 
         self.clients.insert(client_metadata, client_interface);
 
@@ -132,16 +170,17 @@ impl Scripting {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ClientInfo {}
+pub struct ClientInfo {
+    pub id: String,
+}
 
 /// A client does not hold an instance of [Server] directly.
 /// Instead, a [`ServerAdapter`] abstracts over those interactions
 /// so clients can connect to a server that's either hosted locally or
 /// elsewhere.
-pub trait ServerAdapter {
-    fn request_connection(&mut self, client: ClientInfo) -> Result<(), ()>;
-
-    fn next_message(&self) -> Result<ServerMessage, ()>;
+#[async_trait::async_trait]
+pub trait ServerInterface {
+    async fn recv(&self) -> Result<ServerMessage, RecvError>;
 }
 
 #[derive(Debug)]
@@ -155,22 +194,33 @@ pub struct LocalServerInterface {
 }
 
 impl LocalServerInterface {
-    pub fn new(client_channels: (Sender<ClientRequest>, Receiver<ServerMessage>)) -> Self {
-        LocalServerInterface { client_channels }
+    pub async fn new(client: &ClientInfo, channel: &Sender<UnknownMessage>) -> Self {
+        let (client_msg_tx, client_msg_rx) = smol::channel::unbounded();
+
+        let (server_msg_tx, server_msg_rx) = smol::channel::unbounded();
+        let interface = ClientInterface {
+            client_msg_rx,
+            server_msg_tx,
+        };
+
+        channel
+            .send(UnknownMessage::Connect {
+                meta: client.clone(),
+                interface,
+            })
+            .await
+            .expect("Couldn't send connection message to server...");
+
+        Self {
+            client_channels: (client_msg_tx, server_msg_rx),
+        }
     }
 }
 
-impl ServerAdapter for LocalServerInterface {
-    fn request_connection(&mut self, _client: ClientInfo) -> Result<(), ()> {
-        self.client_channels
-            .0
-            .send(ClientRequest::Connect)
-            .expect("Couldn't send request.");
-        Ok(())
-    }
-
-    fn next_message(&self) -> Result<ServerMessage, ()> {
-        self.client_channels.1.recv().map_err(|_| ())
+#[async_trait::async_trait]
+impl ServerInterface for LocalServerInterface {
+    async fn recv(&self) -> Result<ServerMessage, RecvError> {
+        self.client_channels.1.recv().await
     }
 }
 
@@ -178,14 +228,10 @@ impl ServerAdapter for LocalServerInterface {
 /// Queries are resolved through a network layer like HTTP or WebSocket.
 pub struct RemoteServer {}
 
-impl ServerAdapter for RemoteServer {
-    fn request_connection(&mut self, _client: ClientInfo) -> Result<(), ()> {
-        // TODO: Talk to the server over HTTP, get a response, then upgrade the connection to WebSocket.
-        Err(())
-    }
-
-    fn next_message(&self) -> Result<ServerMessage, ()> {
-        Err(())
+#[async_trait::async_trait]
+impl ServerInterface for RemoteServer {
+    async fn recv(&self) -> Result<ServerMessage, RecvError> {
+        Err(RecvError)
     }
 }
 

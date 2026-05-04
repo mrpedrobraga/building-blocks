@@ -1,5 +1,5 @@
-TextureDefinition {
+TextureDefinition (
     id: "toyvox:main_atlas",
     display_name: "Main Atlas",
     source: "./main_atlas.png"
-}
+)

@@ -1,9 +1,10 @@
 use std::{
-    sync::{mpsc::Sender, Arc},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
 use glam::UVec2;
+use smol::channel::Sender;
 use tracing::{info, info_span};
 use winit::{
     application::ApplicationHandler,
@@ -104,7 +105,7 @@ impl ApplicationState {
         render_client: &mut RenderClient,
         client: &mut GuiClient,
     ) {
-        if let Some(server) = &client.server_adapter {
+        if let Some(server) = &client.server_interface {
             // TODO: Stream resources from the server on another thread
             // so we don't lag while waiting for resources.
             let universe = Universe::example();

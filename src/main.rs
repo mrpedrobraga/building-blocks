@@ -1,42 +1,38 @@
-use std::sync::mpsc;
-
 use building_blocks::{
     client::{gui::Application, Client, GuiClient},
     data_packs::Universe,
-    server::{ClientInfo, ClientInterface, LocalServerInterface, ServerAdapter, UniverseServer},
+    server::{ClientInfo, UniverseServer},
 };
 
 fn main() {
     tracing_subscriber::fmt::init();
 
-    let (client_msg_tx, client_msg_rx) = mpsc::channel();
-    let (server_msg_tx, server_msg_rx) = mpsc::channel();
-
-    let (app_msg_tx, app_msg_rx) = mpsc::channel();
+    let (app_msg_tx, app_msg_rx) = smol::channel::unbounded();
 
     std::thread::spawn(|| {
-        let universe = Universe::example();
-        let mut server = UniverseServer::new(universe);
+        let (unknown_msg_tx, unknown_msg_rx) = smol::channel::unbounded();
 
-        let client_interface = ClientInterface::new(client_msg_rx, server_msg_tx);
+        let server_task = async move {
+            let universe = Universe::example();
+            let server = UniverseServer::new(universe, unknown_msg_rx);
 
-        server
-            .request_client_connection(ClientInfo {}, client_interface)
-            .unwrap();
+            server.run().await;
+        };
+
+        let client_task = async move {
+            let mut client = GuiClient::new(
+                ClientInfo {
+                    id: "mrpedrobraga".to_string(),
+                },
+                app_msg_rx,
+            );
+            client.send_connection_request_local(&unknown_msg_tx).await;
+            client.run().await;
+        };
 
         smol::block_on(async {
-            server.run().await;
+            futures::join!(server_task, client_task);
         });
-    });
-
-    std::thread::spawn(move || {
-        let mut adapter = LocalServerInterface::new((client_msg_tx, server_msg_rx));
-        let mut client = GuiClient::new(app_msg_rx);
-        adapter
-            .request_connection(ClientInfo {})
-            .expect("Failed sending connection request.\nUnderstand — the server didn't 'reject' the client per se, the request failed to reach it altogether.");
-        client.install_adapter(adapter).unwrap();
-        client.run();
     });
 
     Application::new(app_msg_tx).run();

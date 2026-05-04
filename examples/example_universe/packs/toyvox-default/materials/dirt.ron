@@ -1,7 +1,11 @@
 MaterialDefinition (
     id: "toyvox:dirt",
+    display_name: "Dirt",
     albedo: TextureRef (
-        texture_id: "toyvox:main_atlas",
-        texture_rect: Rect(0, 0, 8, 8), 
+        id: "toyvox:main_atlas",
+        rect: Some(Rect (
+            position: Vec2(0, 0),
+            size: Vec2(8, 8)
+        )), 
     )
 )

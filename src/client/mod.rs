@@ -2,22 +2,25 @@
 //!
 //! Traits and structs for clients which are a player's way of interacting with a universe.
 
-use std::sync::mpsc::Receiver;
+use std::pin::Pin;
 
+use smol::channel::{Receiver, Sender};
 use tracing::{info, info_span};
 
 use crate::{
     data_packs::Universe,
-    server::{ClientInfo, ServerAdapter},
+    server::{ClientInfo, LocalServerInterface, ServerInterface, UnknownMessage},
     world::{Scene, World},
 };
 
 pub mod gui;
 
 pub trait Client {
-    fn install_adapter<S: ServerAdapter + 'static>(&mut self, server: S) -> Result<(), ()>;
-
-    fn metadata(&self) -> ClientInfo;
+    fn send_connection_request_local<'a>(
+        &'a mut self,
+        channel: &'a Sender<UnknownMessage>,
+    ) -> Pin<Box<dyn Future<Output = ()> + '_>>;
+    fn info(&self) -> &ClientInfo;
 }
 
 pub struct GameView {
@@ -26,29 +29,12 @@ pub struct GameView {
     pub current_scene: Scene,
 }
 
-pub struct DummyClient {}
-
-impl DummyClient {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl Client for DummyClient {
-    fn install_adapter<S: ServerAdapter>(&mut self, #[expect(unused)] server: S) -> Result<(), ()> {
-        Ok(())
-    }
-
-    fn metadata(&self) -> ClientInfo {
-        ClientInfo {}
-    }
-}
-
 /// The "default" GUI client.
 ///
 /// It launches a desktop application through which you can connect to servers and stuff.
 pub struct GuiClient {
-    server_adapter: Option<Box<dyn ServerAdapter>>,
+    pub info: ClientInfo,
+    server_interface: Option<Box<dyn ServerInterface>>,
     pub game_resources: Option<GameView>,
     pub app_msg_rx: Option<Receiver<GuiMessage>>,
 }
@@ -61,34 +47,55 @@ pub enum GuiMessage {
 }
 
 impl GuiClient {
-    pub fn new(app_msg_rx: Receiver<GuiMessage>) -> Self {
+    pub fn new(info: ClientInfo, app_msg_rx: Receiver<GuiMessage>) -> Self {
         Self {
-            server_adapter: None,
+            info,
+            server_interface: None,
             game_resources: None,
             app_msg_rx: Some(app_msg_rx),
         }
     }
 
-    pub fn run(&mut self) {
+    pub async fn run(&mut self) {
         let s = info_span!("client");
         let _ = s.enter();
 
-        if let Ok(message) = self.server_adapter.as_ref().unwrap().next_message() {
-            info!("[Client] Message from server --- {:?}", message);
+        let Some(interface) = self.server_interface.as_ref() else {
+            return;
+        };
+
+        info!("[Client] Waiting for server messages.");
+
+        loop {
+            match interface.recv().await {
+                Ok(message) => {
+                    info!("[Client] Message from server --- {:?}", message);
+                }
+                Err(err) => {
+                    info!("[Client] Shutting down. Cause: {:?}", err);
+                    break;
+                }
+            }
         }
+
+        info!("[Client] Done.");
     }
 }
 
 impl Client for GuiClient {
-    fn install_adapter<S: ServerAdapter + 'static>(
-        &mut self,
-        #[allow(unused)] server_adapter: S,
-    ) -> Result<(), ()> {
-        self.server_adapter.replace(Box::new(server_adapter));
-        Ok(())
+    fn send_connection_request_local<'a>(
+        &'a mut self,
+        channel: &'a Sender<UnknownMessage>,
+    ) -> Pin<Box<dyn Future<Output = ()> + '_>> {
+        info!("[Client] Attempting to establish a connection to the server...");
+        Box::pin(async {
+            self.server_interface.replace(Box::new(
+                LocalServerInterface::new(self.info(), channel).await,
+            ));
+        })
     }
 
-    fn metadata(&self) -> ClientInfo {
-        ClientInfo {}
+    fn info(&self) -> &ClientInfo {
+        &self.info
     }
 }

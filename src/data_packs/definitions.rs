@@ -63,12 +63,6 @@ impl Universe {
     }
 }
 
-#[test]
-fn test_u_loadin() {
-    let u = Universe::from_directory(PathBuf::from("./examples/example_universe")).unwrap();
-    dbg!(u);
-}
-
 /// File on disk that defines a folder as containing a data pack.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DataPackDefinition {
@@ -122,6 +116,7 @@ fn extract_all_from_folder<T: 'static + Identifiable + for<'de> Deserialize<'de>
         let entry_path = entry.path();
         if entry_path.extension() == Some(&OsStr::new("ron")) {
             let raw_block_definition = std::fs::read_to_string(entry.path())?;
+            println!("\n\nReading {}\n", raw_block_definition);
             let block_definition: T =
                 ron::from_str(raw_block_definition.as_str()).expect("Failed to parse ron file.");
             target.insert(block_definition.id(), block_definition);
@@ -129,4 +124,10 @@ fn extract_all_from_folder<T: 'static + Identifiable + for<'de> Deserialize<'de>
     }
 
     Ok(())
+}
+
+#[test]
+fn test_u_loadin() {
+    let u = Universe::from_directory(PathBuf::from("./examples/example_universe")).unwrap();
+    dbg!(u);
 }

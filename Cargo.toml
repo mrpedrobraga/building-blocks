@@ -5,7 +5,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+async-trait = "0.1.89"
 bytemuck = "1.25.0"
+futures = "0.3.32"
 generational-arena = { version = "0.2.9", features = ["serde"] }
 glam = { version = "0.32.1", features = ["bytemuck", "serde"] }
 image = { version = "0.24", default-features = false, features = ["png"] }

@@ -1,13 +1,14 @@
 use glam::{Affine3A, UVec3};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ServerMessage {
     Connection(ServerConnectionMessage),
     World(ServerWorldMessage),
     Scene(ServerWorldMessage),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ServerConnectionMessage {
     /// Server accepted the connection attempt! Yay!
     Connect {},
@@ -15,7 +16,7 @@ pub enum ServerConnectionMessage {
     Disconnect { reason: String },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ServerWorldMessage {
     /// Client was transported to a new (or their first) world!
     EnterWorld {
@@ -31,7 +32,7 @@ pub enum ServerWorldMessage {
     LeaveWorld,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ServerSceneMessage {
     /// Client was transported to a new (or their first) scene within a world!
     EnterScene {
@@ -48,7 +49,7 @@ pub enum ServerSceneMessage {
     BlockGroup(ServerBlockGroupMessage),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ServerBlockGroupMessage {
     /// Message that declares the existence of a block group!
     Define {
@@ -67,7 +68,7 @@ pub enum ServerBlockGroupMessage {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BlockGroupBlock {
     pub index_in_block_palette: u32,
 }

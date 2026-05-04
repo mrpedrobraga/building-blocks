@@ -1,0 +1,31 @@
+Server Starts
+Loading universe (lazily i think) from directory
+`on_server_start` is called and it can start preparing data
+Here it will possibly load a world from disk!
+
+Client requests connection
+Server accepts, sending universe information (a universe is the protocol through which a server can define the game)
+Client might understand the universe already from its id (it's on cache) or not... if it doesn't:
+    Client requests server for the data pack list.
+    Server returns list of data pack ids.
+Client requests each data pack it does not have.
+Server replies with the data packs in full or through streaming.
+Client notifies server it's ready for building the world.
+Client begins rendering, though little is shown! From now on, client and server exchange messages interspersedly until the game ends!
+
+Server sends "enter world" message.
+Client creates an empty "view" of the world.
+Server sends "let" messages defining the client's player, camera, actions.
+(From here, the client can _already_ send actions to the server! Really!)
+
+Server sends "let" messages defining the scene's environment.
+Server sends "let" messages defining the scene's layout (recursively!).
+    Server sends "let" messages defining each layout's position in the parent and the volume it occupies in space.
+    Server sends "let" messages defining each layout's block groups' position, size, transform.
+        Server sends "let" messages defining each block groups' blocks, possibly streaming.
+    Server sends "let" messages defining each layout's objects, with all their aspects.
+
+(Let messages aren't 'starting' messages, the server can define and de-define stuff as it wishes.)
+
+(If things change, server sends "diff" messages defining what changed, in an efficient way...)
+    (For example, if a block group has been cleared, instead of notifying for each block that changed, it can simply message "CLEAR_ALL" or something.)
