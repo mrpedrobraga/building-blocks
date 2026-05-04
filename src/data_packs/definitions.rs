@@ -71,7 +71,7 @@ pub struct DataPackDefinition {
 
 const DATA_PACK_MANIFEST_NAME: &'static str = "pack.ron";
 const DATA_PACK_BLOCKS_DIR_NAME: &'static str = "blocks";
-const DATA_PACK_APPEARANCES_DIR_NAME: &'static str = "appearances";
+const _DATA_PACK_APPEARANCES_DIR_NAME: &'static str = "appearances";
 const DATA_PACK_MATERIALS_DIR_NAME: &'static str = "materials";
 const DATA_PACK_TEXTURES_DIR_NAME: &'static str = "textures";
 

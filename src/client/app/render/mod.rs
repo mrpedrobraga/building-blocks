@@ -10,7 +10,7 @@ use wgpu::{Device, Queue};
 use winit::dpi::PhysicalSize;
 
 use crate::client::{
-    gui::render::{
+    app::render::{
         blocks_pipeline::{BlockGroupPipeline, GlobalUniforms},
         camera::Camera,
         render_target::{RenderTarget, TextureViewSet, WindowRenderTarget},

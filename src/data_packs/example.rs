@@ -7,7 +7,7 @@ use crate::{
         BlockAppearance, BlockTypeDefinition, MaterialDefinition, MaterialRef, Rect,
         TextureDefinition, TextureRef,
     },
-    world::block::{BlockType, PerFace},
+    world::block::BlockType,
 };
 
 impl Universe {

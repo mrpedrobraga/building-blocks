@@ -1,5 +1,5 @@
 use building_blocks::{
-    client::{gui::Application, Client, GuiClient},
+    client::{app::Application, gui::Client},
     data_packs::Universe,
     server::{ClientInfo, UniverseServer},
 };
@@ -20,7 +20,7 @@ fn main() {
         };
 
         let client_task = async move {
-            let mut client = GuiClient::new(
+            let mut client = Client::new(
                 ClientInfo {
                     id: "mrpedrobraga".to_string(),
                 },

@@ -3,7 +3,7 @@ use image::{EncodableLayout, ImageBuffer, Rgba};
 use wgpu::{util::DeviceExt, BindGroupLayoutEntry};
 
 use crate::{
-    client::gui::render::Gpu,
+    client::app::render::Gpu,
     data_packs::Universe,
     world::{block::BlockGroup, Scene},
 };

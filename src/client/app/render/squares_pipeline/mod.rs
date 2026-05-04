@@ -4,7 +4,7 @@ use wgpu::{
     include_wgsl, util::DeviceExt, PipelineLayout, PrimitiveState, RenderPipeline, TextureFormat,
 };
 
-use crate::client::gui::render::Gpu;
+use crate::client::app::render::Gpu;
 
 pub struct SquaresPipeline {
     pub global_uniforms: GlobalUniforms,

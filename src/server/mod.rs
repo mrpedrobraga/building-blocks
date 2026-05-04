@@ -69,7 +69,10 @@ impl UniverseServer {
                 UnknownMessage::Connect { meta, interface } => {
                     // TODO: Actually take the client info into account!
                     let _ = meta;
-                    info!("[Server] Client {:?} attempting to connect.", meta.id);
+                    info!(
+                        "[Server] Client {:?} attempting to connect. Let's see...",
+                        meta.id
+                    );
                     interface
                         .server_msg_tx
                         .send(ServerMessage::Connection(
@@ -77,6 +80,11 @@ impl UniverseServer {
                         ))
                         .await
                         .expect("Failed to send connection acknowledgement to client.");
+                    info!(
+                        "[Server] This looks alright. Accepting {:?}'s connection request.",
+                        meta.id
+                    );
+
                     self.clients.insert(meta, interface);
                 }
             }
@@ -94,7 +102,7 @@ impl UniverseServer {
         let s = info_span!("client requesting connection");
         let _ = s.enter();
 
-        info!("Client Requesting Connection");
+        info!("[Server] Client Requesting Connection");
 
         client_interface
             .server_msg_tx

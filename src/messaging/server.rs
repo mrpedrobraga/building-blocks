@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum ServerMessage {
     Connection(ServerConnectionMessage),
     World(ServerWorldMessage),
-    Scene(ServerWorldMessage),
+    Scene(ServerSceneMessage),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
