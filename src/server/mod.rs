@@ -4,13 +4,15 @@
 //! Contains traits for the "host" of a universe and worlds where players (clients) can all play together :-)
 
 use crate::{
-    data_packs::Universe,
-    messaging::server::{ServerConnectionMessage, ServerMessage},
+    resources::universe::Universe,
+    server::messages::{ServerConnectionMessage, ServerMessage, ServerWorldMessage},
 };
 use futures::stream::SelectAll;
 use smol::channel::{Receiver, RecvError, Sender};
 use std::{collections::HashMap, sync::Arc};
 use tracing::{info, info_span};
+
+pub mod messages;
 
 /// See the module-level documentation.
 pub struct UniverseServer {
@@ -112,11 +114,11 @@ impl UniverseServer {
             .await
             .expect("Failed to send connection message back to client.");
 
-        client_interface.server_msg_tx.send(ServerMessage::World(
-            crate::messaging::server::ServerWorldMessage::EnterWorld {
+        client_interface
+            .server_msg_tx
+            .send(ServerMessage::World(ServerWorldMessage::EnterWorld {
                 id: "default".to_string(),
-            },
-        ));
+            }));
 
         info!("Client was accepted.");
 

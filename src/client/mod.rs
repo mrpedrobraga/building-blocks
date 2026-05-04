@@ -3,7 +3,7 @@
 //! Traits and structs for clients which are players' way of interacting with a universe through a central authority (a server).
 
 use crate::{
-    data_packs::Universe,
+    resources::universe::Universe,
     world::{Scene, World},
 };
 

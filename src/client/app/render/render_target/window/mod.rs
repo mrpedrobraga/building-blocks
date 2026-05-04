@@ -1,26 +1,7 @@
-//! # Render Target
-//!
-//! Trait and structs for things that can be rendered to. [RenderTarget] is the main trait of this module,
-//! and the trait that all render targets implement.
-
+use crate::client::app::render::render_target::{RenderTarget, TextureViewSet};
 use tracing::warn;
-use wgpu::{
-    Device, Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat, TextureUsages,
-    TextureView,
-};
+use wgpu::{Device, Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages};
 use winit::dpi::PhysicalSize;
-
-/// See the module-level documentation.
-pub trait RenderTarget {
-    /// Returns a [TextureView] that a render pass can render to!
-    fn texture_view_set(&self) -> Result<TextureViewSet, ()>;
-}
-
-pub struct TextureViewSet {
-    pub surface: Option<SurfaceTexture>,
-    pub albedo: TextureView,
-    pub depth: TextureView,
-}
 
 /// This game is famously known for having things be drawn to the window!
 pub struct WindowRenderTarget {

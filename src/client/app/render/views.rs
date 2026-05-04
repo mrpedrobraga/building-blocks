@@ -4,7 +4,7 @@ use wgpu::{util::DeviceExt, BindGroupLayoutEntry};
 
 use crate::{
     client::app::render::Gpu,
-    data_packs::Universe,
+    resources::universe::Universe,
     world::{block::BlockGroup, Scene},
 };
 
@@ -38,7 +38,7 @@ impl UniverseRenderView {
             .iter()
             .filter_map(|block_type| match &block_type.appearance {
                 // TODO: Properly support these cuboid materials!
-                crate::models::BlockAppearance::Cuboid { x_min, .. } => Some(x_min),
+                crate::resources::block_type::BlockAppearance::Cuboid { x_min, .. } => Some(x_min),
             })
             .map(|material_ref| {
                 materials

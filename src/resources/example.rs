@@ -2,10 +2,12 @@ use glam::Vec2;
 use indexmap::{indexset, IndexMap};
 
 use crate::{
-    data_packs::{DataPack, Universe},
-    models::{
-        BlockAppearance, BlockTypeDefinition, MaterialDefinition, MaterialRef, Rect,
-        TextureDefinition, TextureRef,
+    resources::{
+        block_type::{BlockAppearance, BlockTypeDefinition},
+        data_pack::DataPack,
+        material::{MaterialDefinition, MaterialRef},
+        texture::{Rect, TextureDefinition, TextureRef},
+        universe::Universe,
     },
     world::block::BlockType,
 };

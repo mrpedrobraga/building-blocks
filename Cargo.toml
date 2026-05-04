@@ -7,6 +7,7 @@ edition = "2024"
 [dependencies]
 async-trait = "0.1.89"
 bytemuck = "1.25.0"
+dashmap = { version = "6.1.0", features = ["serde"] }
 futures = "0.3.32"
 generational-arena = { version = "0.2.9", features = ["serde"] }
 glam = { version = "0.32.1", features = ["bytemuck", "serde"] }

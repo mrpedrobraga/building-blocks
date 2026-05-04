@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! # Building Blocks
 //!
 //! An unusual game engine for a very specific niche: a block-based sandbox game where
@@ -11,13 +13,22 @@
 pub mod world;
 
 /// Things to do with data packs and the resources worldmakers can "make" their "worlds" with!
-pub mod data_packs;
+pub mod resources;
 
-/// Anything to do with messaging between the "server" and the "clients".
-pub mod messaging;
-
-// TODO: Refactor where these go:
-
+/// The client, which is responsible for 'visualizing' a game and interfacing with the player's device.
 pub mod client;
-pub mod models;
+/// The server, the central authority of the game, which broadcasts the state of the world and evolves it.
 pub mod server;
+
+/* Helpful macros */
+
+#[macro_export]
+macro_rules! impl_id {
+    ($type:ty) => {
+        impl crate::resources::Id for $type {
+            fn id(&self) -> String {
+                self.id.clone()
+            }
+        }
+    };
+}

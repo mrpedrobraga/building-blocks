@@ -1,6 +1,6 @@
 use building_blocks::{
     client::{app::Application, gui::Client},
-    data_packs::Universe,
+    resources::universe::Universe,
     server::{ClientInfo, UniverseServer},
 };
 

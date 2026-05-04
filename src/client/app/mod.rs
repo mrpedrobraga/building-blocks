@@ -16,11 +16,11 @@ use winit::{
 
 use crate::{
     client::{
-        app::render::{render_target::WindowRenderTarget, Gpu, RenderClient},
+        app::render::{render_target::window::WindowRenderTarget, Gpu, RenderClient},
         gui::{AppMessage, Client},
         GameView,
     },
-    data_packs::Universe,
+    resources::universe::Universe,
     world::World,
 };
 

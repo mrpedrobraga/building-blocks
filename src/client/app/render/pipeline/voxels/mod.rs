@@ -21,7 +21,7 @@ use wgpu::{
     RenderPipeline, RenderPipelineDescriptor, TextureFormat,
 };
 
-pub struct BlockGroupPipeline {
+pub struct VoxelPipeline {
     pub universe_bind_group_layout: BindGroupLayout,
     pub block_group_bind_group_layout: BindGroupLayout,
     pub render_pipeline: RenderPipeline,
@@ -35,7 +35,7 @@ pub struct GlobalUniforms {
     pub _padding: [f32; 3],
 }
 
-impl BlockGroupPipeline {
+impl VoxelPipeline {
     pub fn new(
         gpu_device: &Device,
         render_target_format: TextureFormat,
@@ -97,7 +97,7 @@ impl BlockGroupPipeline {
             cache: None,
         });
 
-        BlockGroupPipeline {
+        VoxelPipeline {
             universe_bind_group_layout,
             block_group_bind_group_layout,
             render_pipeline,

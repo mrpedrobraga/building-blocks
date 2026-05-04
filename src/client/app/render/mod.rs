@@ -4,26 +4,26 @@
 //! and the current world it's rendering. Those are usually pulled from a server currently running a game,
 //! but not necessarily — you can render a universe and a world created out of thin air, or snapshots of one loaded from a file.
 
-use glam::{UVec2, Vec3};
+use crate::{
+    client::{
+        app::render::views::{BlockGroupRenderView, SceneRenderView, UniverseRenderView},
+        GameView,
+    },
+    world::camera::{Camera, CameraProjection},
+};
+use glam::{Quat, UVec2, Vec3};
 use tracing::{info, info_span};
 use wgpu::{Device, Queue};
 use winit::dpi::PhysicalSize;
-
-use crate::client::{
-    app::render::{
-        blocks_pipeline::{BlockGroupPipeline, GlobalUniforms},
-        camera::Camera,
-        render_target::{RenderTarget, TextureViewSet, WindowRenderTarget},
-        squares_pipeline::SquaresPipeline,
-        views::{BlockGroupRenderView, SceneRenderView, UniverseRenderView},
-    },
-    GameView,
+use {
+    pipeline::pixels::SquaresPipeline,
+    pipeline::voxels::{GlobalUniforms, VoxelPipeline},
+    render_target::{window::WindowRenderTarget, RenderTarget, TextureViewSet},
 };
 
-pub mod blocks_pipeline;
-pub mod camera;
+pub mod pipeline;
 pub mod render_target;
-pub mod squares_pipeline;
+
 pub mod views;
 
 pub struct Gpu {
@@ -50,7 +50,7 @@ pub struct RenderClient {
     pub current_scene_render_view: Option<SceneRenderView>,
 
     pub squares_pipeline: Option<SquaresPipeline>,
-    pub block_group_pipeline: Option<BlockGroupPipeline>,
+    pub block_group_pipeline: Option<VoxelPipeline>,
 }
 
 impl RenderClient {
@@ -85,20 +85,18 @@ impl RenderClient {
         // will look like `self.squares_pipeline.resize(&self.gpu.device, new_size)`;
 
         // TODO: Obviously we'll access this camera from somewhere instead of creating it here.
-        let c = Camera {
-            transform: Camera::make_look_at_matrix(
-                Vec3::new(10.0, 10.0, 10.0).rotate_z(0.0),
-                Vec3::new(1.5, 1.5, 1.5),
-                Vec3::Z,
-            ),
-            projection: camera::CameraProjection::Perspective {
+        let mut camera = Camera {
+            position: Vec3::new(10.0, 10.0, 10.0),
+            orientation: Quat::default(),
+            projection: CameraProjection::Perspective {
                 vertical_fov_radians: 60.0_f32.to_radians(),
                 z_near_clipping_plane: 0.1,
                 z_far_clipping_plane: 100.0,
             },
         };
+        camera.look_at(Vec3::new(1.5, 1.5, 1.5), Vec3::Z);
         self.global_uniforms = GlobalUniforms {
-            view_matrix: c.view_matrix(new_size).to_cols_array(),
+            view_matrix: camera.view_matrix(new_size).to_cols_array(),
             ..self.global_uniforms
         };
         self.sync_uniforms(gpu);
@@ -141,22 +139,19 @@ impl RenderClient {
         let block_group_bind_group_layout = BlockGroupRenderView::bind_group_layout(&gpu);
 
         // TODO: Get the camera from somewhere else lol.
-        let c = Camera {
-            transform: Camera::make_look_at_matrix(
-                Vec3::new(10.0, 10.0, 10.0).rotate_z(0.0),
-                Vec3::new(1.5, 1.5, 1.5),
-                Vec3::Z,
-            ),
-            projection: camera::CameraProjection::Perspective {
+        let mut camera = Camera {
+            position: Vec3::new(10.0, 10.0, 10.0),
+            orientation: Quat::default(),
+            projection: CameraProjection::Perspective {
                 vertical_fov_radians: 60.0_f32.to_radians(),
                 z_near_clipping_plane: 0.1,
                 z_far_clipping_plane: 100.0,
             },
         };
+        camera.look_at(Vec3::new(1.5, 1.5, 1.5), Vec3::Z);
         self.global_uniforms = GlobalUniforms {
-            view_matrix: c.view_matrix(screen_size).to_cols_array(),
-            global_time: 0.0,
-            _padding: [0.0; 3],
+            view_matrix: camera.view_matrix(screen_size).to_cols_array(),
+            ..self.global_uniforms
         };
         self.sync_uniforms(gpu);
 
@@ -182,7 +177,7 @@ impl RenderClient {
         self.universe_render_view = Some(universe_render_view);
         self.current_scene_render_view = Some(current_scene_render_view);
 
-        self.block_group_pipeline = Some(BlockGroupPipeline::new(
+        self.block_group_pipeline = Some(VoxelPipeline::new(
             &gpu.device,
             self.window_render_target.surface_config.format,
             universe_bind_group_layout,

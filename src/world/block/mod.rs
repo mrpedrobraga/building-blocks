@@ -14,8 +14,8 @@ use glam::{Affine3A, UVec3, UVec4, Vec2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data_packs::definitions::Identifiable,
-    models::{BlockAppearance, BlockTypeDefinition},
+    resources::block_type::{BlockAppearance, BlockTypeDefinition},
+    resources::Id,
 };
 
 /// Information about what a given block "is":
@@ -27,7 +27,7 @@ pub struct BlockType {
     pub appearance: BlockAppearance,
 }
 
-impl Identifiable for BlockType {
+impl Id for BlockType {
     fn id(&self) -> String {
         self.id.clone()
     }

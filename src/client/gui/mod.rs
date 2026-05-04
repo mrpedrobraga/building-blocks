@@ -60,17 +60,16 @@ impl Client {
         info!("[Client] Waiting for server messages.");
 
         loop {
-            use crate::messaging::server::ServerMessage::*;
+            use crate::server::messages::*;
+            use ServerMessage::*;
 
             match interface.recv().await {
                 Ok(message) => match message {
                     Connection(server_connection_message) => match server_connection_message {
-                        crate::messaging::server::ServerConnectionMessage::Connect {} => {
+                        ServerConnectionMessage::Connect {} => {
                             info!("[Client] Server accepted connection! Yay!")
                         }
-                        crate::messaging::server::ServerConnectionMessage::Disconnect {
-                            reason,
-                        } => {
+                        ServerConnectionMessage::Disconnect { reason } => {
                             info!("[Client] Server disconnected because '{}'.", reason)
                         }
                     },

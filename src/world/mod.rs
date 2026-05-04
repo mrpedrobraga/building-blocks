@@ -5,6 +5,7 @@
 
 /// All to do with the blocks you use to create builds and landscapes, yeah!
 pub mod block;
+pub mod camera;
 pub mod example;
 
 use block::BlockGroup;
@@ -41,4 +42,5 @@ pub struct Environment {
 #[derive(Clone)]
 pub struct Layout {
     pub block_groups: Arena<BlockGroup>,
+    // pub objects: Arena<Object>,
 }
