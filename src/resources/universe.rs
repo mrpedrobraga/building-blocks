@@ -27,7 +27,7 @@ pub enum DataPackRef {
     Git(String),
 }
 
-const UNIVERSE_MANIFEST_NAME: &'static str = "universe.ron";
+const UNIVERSE_MANIFEST_NAME: &str = "universe.ron";
 
 crate::impl_id!(UniverseDefinition);
 

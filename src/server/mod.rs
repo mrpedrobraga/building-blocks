@@ -156,6 +156,12 @@ impl Scripting {
     }
 }
 
+impl Default for Scripting {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClientInfo {
     pub id: String,

@@ -26,11 +26,11 @@ pub struct DataPackDefinition {
 
 crate::impl_id!(DataPackDefinition);
 
-const DATA_PACK_MANIFEST_NAME: &'static str = "pack.ron";
-const DATA_PACK_BLOCKS_DIR_NAME: &'static str = "blocks";
-const _DATA_PACK_APPEARANCES_DIR_NAME: &'static str = "appearances";
-const DATA_PACK_MATERIALS_DIR_NAME: &'static str = "materials";
-const DATA_PACK_TEXTURES_DIR_NAME: &'static str = "textures";
+const DATA_PACK_MANIFEST_NAME: &str = "pack.ron";
+const DATA_PACK_BLOCKS_DIR_NAME: &str = "blocks";
+const _DATA_PACK_APPEARANCES_DIR_NAME: &str = "appearances";
+const DATA_PACK_MATERIALS_DIR_NAME: &str = "materials";
+const DATA_PACK_TEXTURES_DIR_NAME: &str = "textures";
 
 impl DataPack {
     pub fn from_directory(data_path_dir_path: PathBuf) -> std::io::Result<Self> {

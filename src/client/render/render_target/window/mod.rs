@@ -1,9 +1,11 @@
-use crate::client::render::render_target::{RenderTarget, TextureViewSet};
+//! This game is famously known for having things be drawn to the window!
+
+use crate::client::render::render_target::{GetTextureError, RenderTarget, TextureViewSet};
 use tracing::warn;
 use wgpu::{Device, Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages};
 use winit::dpi::PhysicalSize;
 
-/// This game is famously known for having things be drawn to the window!
+#[derive(Debug)]
 pub struct WindowRenderTarget {
     pub(crate) surface: Surface<'static>,
     pub(crate) depth_texture: Texture,
@@ -28,7 +30,7 @@ impl WindowRenderTarget {
             desired_maximum_frame_latency: 2,
             present_mode: wgpu::PresentMode::AutoVsync,
         };
-        surface.configure(&device, &surface_config);
+        surface.configure(device, &surface_config);
 
         let depth_texture = Self::create_depth_texture(device, &surface_config);
 
@@ -44,7 +46,7 @@ impl WindowRenderTarget {
         self.surface_size = new_size;
         self.surface_config.width = new_size.width;
         self.surface_config.height = new_size.height;
-        self.surface.configure(&device, &self.surface_config);
+        self.surface.configure(device, &self.surface_config);
         self.depth_texture = Self::create_depth_texture(device, &self.surface_config);
     }
 
@@ -87,10 +89,10 @@ impl WindowRenderTarget {
 }
 
 impl RenderTarget for WindowRenderTarget {
-    fn texture_view_set(&self) -> Result<TextureViewSet, ()> {
+    fn texture_view_set(&self) -> Result<TextureViewSet, GetTextureError> {
         let surface = self.surface.get_current_texture();
         let wgpu::CurrentSurfaceTexture::Success(current_texture) = surface else {
-            return Err(());
+            return Err(GetTextureError);
         };
         let albedo = current_texture.texture.create_view(&Default::default());
         let depth = self.depth_texture.create_view(&Default::default());

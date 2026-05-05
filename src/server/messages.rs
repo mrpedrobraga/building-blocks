@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 pub enum ServerMessage {
     Connection(ServerConnectionMessage),
     World(ServerWorldMessage),
-    Scene(ServerSceneMessage),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,6 +37,7 @@ pub enum ServerWorldMessage {
     ///
     /// So, really, this represents the client kicking you to world select screen (if there is one).
     LeaveWorld,
+    CurrentScene(ServerSceneMessage),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

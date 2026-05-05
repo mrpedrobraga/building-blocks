@@ -7,18 +7,18 @@
 //! A scene is made of an assortment of visible things which are rendered in batches.
 //!
 //! 1. First are rendered the block clusters — those are 3D nametables indexing into a block palette.
-//!     1.1. Collections of voxels can be rendered all at once in a single draw call!
-//!     1.2. Specialized voxels with complex, non-cuboid models will be drawn all together in a single call, too.
+//!    1.1. Collections of voxels can be rendered all at once in a single draw call!
+//!    1.2. Specialized voxels with complex, non-cuboid models will be drawn all together in a single call, too.
 //! 2. Second are rendered the sprites — those are independent models that have arbitrary positions.
-//!     2.1. Sprites are made of regular geometry like boxes and planes, so they can be all drawn in a single call.
+//!    2.1. Sprites are made of regular geometry like boxes and planes, so they can be all drawn in a single call.
 //!
 //! ## The Shader
 //!
 //!
 
 use wgpu::{
-    include_wgsl, BindGroupLayout, Device, PipelineLayoutDescriptor, PrimitiveState,
-    RenderPipeline, RenderPipelineDescriptor, TextureFormat,
+    BindGroupLayout, Device, PipelineLayoutDescriptor, PrimitiveState, RenderPipeline,
+    RenderPipelineDescriptor, TextureFormat, include_wgsl,
 };
 
 pub struct VoxelPipeline {

@@ -1,17 +1,21 @@
-use crate::{
-    client::view::{BlockTypeId, LayoutId, LayoutRef},
-    world::block::BlockAppearance,
-};
+use super::view::{BlockTypeId, LayoutId, LayoutRef};
 use dashmap::DashMap;
 use glam::{UVec3, Vec2};
 
+pub mod gpu;
+pub mod pipeline;
 pub mod render_target;
 
-/// Module for modifications to views.
+/// Module for progressive modifications to render states.
 pub mod patch;
 
+pub struct GameRenderState {
+    pub universe_state: UniverseRenderState,
+    pub world_state: WorldRenderState,
+}
+
 pub struct UniverseRenderState {
-    pub block_appearance_palette: DashMap<BlockTypeId, BlockAppearance>,
+    pub block_appearance_palette: DashMap<BlockTypeId, BlockAppearanceEntry>,
 }
 
 pub struct WorldRenderState {

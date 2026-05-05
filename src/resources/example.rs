@@ -1,5 +1,5 @@
 use glam::Vec2;
-use indexmap::{indexset, IndexMap};
+use indexmap::{IndexMap, indexset};
 
 use crate::{
     resources::{

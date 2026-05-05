@@ -25,7 +25,7 @@ pub mod server;
 #[macro_export]
 macro_rules! impl_id {
     ($type:ty) => {
-        impl crate::resources::Id for $type {
+        impl $crate::resources::Id for $type {
             fn id(&self) -> String {
                 self.id.clone()
             }

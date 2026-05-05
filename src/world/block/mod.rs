@@ -13,7 +13,7 @@
 use glam::{Affine3A, UVec3, UVec4, Vec2};
 use serde::{Deserialize, Serialize};
 
-use crate::resources::{block_type::BlockTypeDefinition, material::MaterialRef, Id};
+use crate::resources::{Id, block_type::BlockTypeDefinition, material::MaterialRef};
 
 /// Information about what a given block "is":
 /// Its appearance, general information and physics;
@@ -92,9 +92,9 @@ pub struct BlockGroup {
 impl Clone for BlockGroup {
     fn clone(&self) -> Self {
         Self {
-            transform: self.transform.clone(),
-            physics_mode: self.physics_mode.clone(),
-            size: self.size.clone(),
+            transform: self.transform,
+            physics_mode: self.physics_mode,
+            size: self.size,
             blocks: self.blocks.clone(),
         }
     }

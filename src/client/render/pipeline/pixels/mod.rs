@@ -1,12 +1,11 @@
+use crate::client::render::gpu::Gpu;
 use glam::UVec2;
 use image::{EncodableLayout, Rgba};
 use wgpu::{
-    include_wgsl, util::DeviceExt, PipelineLayout, PrimitiveState, RenderPipeline, TextureFormat,
+    PipelineLayout, PrimitiveState, RenderPipeline, TextureFormat, include_wgsl, util::DeviceExt,
 };
 
-use crate::client::app::render::Gpu;
-
-pub struct SquaresPipeline {
+pub struct PixelsPipeline {
     pub global_uniforms: GlobalUniforms,
     pub layers: Vec<Layer>,
 
@@ -35,7 +34,7 @@ pub struct LayerUniforms {
     pub transform: [f32; 16],
 }
 
-impl SquaresPipeline {
+impl PixelsPipeline {
     pub fn new(gpu: &Gpu, render_target_format: TextureFormat, render_target_size: UVec2) -> Self {
         let global_uniforms = GlobalUniforms {};
         let layers = vec![];
@@ -234,7 +233,7 @@ impl SquaresPipeline {
                     cache: None,
                 });
 
-        SquaresPipeline {
+        PixelsPipeline {
             global_uniforms,
             layers,
             layers_to_cache_pipeline_layout,

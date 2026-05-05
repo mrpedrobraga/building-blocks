@@ -10,8 +10,11 @@ pub mod window;
 /// See the module-level documentation.
 pub trait RenderTarget {
     /// Returns a [TextureView] that a render pass can render to!
-    fn texture_view_set(&self) -> Result<TextureViewSet, ()>;
+    fn texture_view_set(&self) -> Result<TextureViewSet, GetTextureError>;
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct GetTextureError;
 
 /// A set of textures to which render passes can draw.
 pub struct TextureViewSet {

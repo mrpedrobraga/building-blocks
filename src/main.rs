@@ -1,5 +1,5 @@
 use building_blocks::{
-    client::{app::Application, gui::Client},
+    client::{Client, app::Application},
     resources::universe::Universe,
     server::{ClientInfo, UniverseServer},
 };
@@ -35,5 +35,5 @@ fn main() {
         });
     });
 
-    Application::new(app_msg_tx).run();
+    Application::run(app_msg_tx);
 }

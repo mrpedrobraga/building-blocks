@@ -43,7 +43,7 @@ pub fn extract_all_from_folder<T: 'static + Id + for<'de> Deserialize<'de>>(
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let entry_path = entry.path();
-        if entry_path.extension() == Some(&OsStr::new("ron")) {
+        if entry_path.extension() == Some(OsStr::new("ron")) {
             let raw_block_definition = std::fs::read_to_string(entry.path())?;
             println!("\n\nReading {}\n", raw_block_definition);
             let block_definition: T =
