@@ -1,13 +1,12 @@
-#![allow(unused)]
 //! # Server
 //!
 //! Contains traits for the "host" of a universe and worlds where players (clients) can all play together :-)
 
 use crate::{
+    client::messages::ClientRequest,
     resources::universe::Universe,
     server::messages::{ServerConnectionMessage, ServerMessage, ServerWorldMessage},
 };
-use futures::stream::SelectAll;
 use smol::channel::{Receiver, RecvError, Sender};
 use std::{collections::HashMap, sync::Arc};
 use tracing::{info, info_span};
@@ -30,6 +29,7 @@ pub enum UnknownMessage {
 }
 
 pub struct ClientInterface {
+    #[allow(unused)]
     client_msg_rx: Receiver<ClientRequest>,
     server_msg_tx: Sender<ServerMessage>,
 }
@@ -87,6 +87,14 @@ impl UniverseServer {
                         meta.id
                     );
 
+                    interface
+                        .server_msg_tx
+                        .send(ServerMessage::World(ServerWorldMessage::EnterWorld {
+                            id: "default".to_string(),
+                        }))
+                        .await
+                        .expect("Failed to send enter world message...");
+
                     self.clients.insert(meta, interface);
                 }
             }
@@ -94,43 +102,12 @@ impl UniverseServer {
 
         info!("[Server] Done.")
     }
-
-    /// Requests this server accepts a client.
-    pub async fn client_requesting_connection(
-        &mut self,
-        client_metadata: ClientInfo,
-        client_interface: ClientInterface,
-    ) -> Result<(), ()> {
-        let s = info_span!("client requesting connection");
-        let _ = s.enter();
-
-        info!("[Server] Client Requesting Connection");
-
-        client_interface
-            .server_msg_tx
-            .send(ServerMessage::Connection(
-                ServerConnectionMessage::Connect {},
-            ))
-            .await
-            .expect("Failed to send connection message back to client.");
-
-        client_interface
-            .server_msg_tx
-            .send(ServerMessage::World(ServerWorldMessage::EnterWorld {
-                id: "default".to_string(),
-            }));
-
-        info!("Client was accepted.");
-
-        self.clients.insert(client_metadata, client_interface);
-
-        Ok(())
-    }
 }
 
 /// Object that adds functionality to a server!
 ///
 /// This beautiful baby boy is res
+#[allow(unused)]
 pub struct Scripting {
     unit: Arc<rune::Unit>,
     runtime: Arc<rune::runtime::RuntimeContext>,
@@ -191,11 +168,6 @@ pub struct ClientInfo {
 #[async_trait::async_trait]
 pub trait ServerInterface {
     async fn recv(&self) -> Result<ServerMessage, RecvError>;
-}
-
-#[derive(Debug)]
-pub enum ClientRequest {
-    Connect,
 }
 
 /// A server that's "right here" in the same machine and process as the client.

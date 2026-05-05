@@ -1,5 +1,5 @@
 use crate::{
-    client::GameView,
+    client::{app::render::GameRenderState, view::GameView},
     server::{ClientInfo, LocalServerInterface, ServerInterface, UnknownMessage},
 };
 use smol::channel::{Receiver, Sender};
@@ -12,7 +12,8 @@ use tracing::{info, info_span};
 pub struct Client {
     pub info: ClientInfo,
     pub server_interface: Option<Box<dyn ServerInterface>>,
-    pub game_resources: Option<GameView>,
+    pub game_view: Option<GameView>,
+    pub render_client: Option<GameRenderState>,
     pub app_msg_rx: Option<Receiver<AppMessage>>,
 }
 
@@ -28,7 +29,8 @@ impl Client {
         Self {
             info,
             server_interface: None,
-            game_resources: None,
+            game_view: None,
+            render_client: None,
             app_msg_rx: Some(app_msg_rx),
         }
     }

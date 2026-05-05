@@ -13,10 +13,7 @@
 use glam::{Affine3A, UVec3, UVec4, Vec2};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    resources::block_type::{BlockAppearance, BlockTypeDefinition},
-    resources::Id,
-};
+use crate::resources::{block_type::BlockTypeDefinition, material::MaterialRef, Id};
 
 /// Information about what a given block "is":
 /// Its appearance, general information and physics;
@@ -43,28 +40,28 @@ impl BlockType {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct PerFace<T> {
-    pub x_min: T,
-    pub x_max: T,
-    pub y_min: T,
-    pub y_max: T,
-    pub z_min: T,
-    pub z_max: T,
+/// Defines the appearance of a voxel...
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BlockAppearance {
+    Cuboid {
+        x_min: MaterialRef,
+        x_max: MaterialRef,
+        y_min: MaterialRef,
+        y_max: MaterialRef,
+        z_min: MaterialRef,
+        z_max: MaterialRef,
+    },
 }
 
-impl<T> PerFace<T>
-where
-    T: Clone,
-{
-    pub fn homogeneous(value: T) -> Self {
-        Self {
-            x_min: value.clone(),
-            x_max: value.clone(),
-            y_min: value.clone(),
-            y_max: value.clone(),
-            z_min: value.clone(),
-            z_max: value,
+impl BlockAppearance {
+    pub fn homogeneous(material: MaterialRef) -> Self {
+        Self::Cuboid {
+            x_min: material.clone(),
+            x_max: material.clone(),
+            y_min: material.clone(),
+            y_max: material.clone(),
+            z_min: material.clone(),
+            z_max: material.clone(),
         }
     }
 }

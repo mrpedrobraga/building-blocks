@@ -1,4 +1,4 @@
-use crate::client::app::render::render_target::{RenderTarget, TextureViewSet};
+use crate::client::render::render_target::{RenderTarget, TextureViewSet};
 use tracing::warn;
 use wgpu::{Device, Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages};
 use winit::dpi::PhysicalSize;

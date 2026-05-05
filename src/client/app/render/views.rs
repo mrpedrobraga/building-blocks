@@ -1,12 +1,14 @@
-use glam::{Mat4, UVec3, Vec2};
-use image::{EncodableLayout, ImageBuffer, Rgba};
-use wgpu::{util::DeviceExt, BindGroupLayoutEntry};
-
 use crate::{
     client::app::render::Gpu,
     resources::universe::Universe,
-    world::{block::BlockGroup, Scene},
+    world::{
+        block::{BlockAppearance, BlockGroup},
+        Scene,
+    },
 };
+use glam::{Mat4, UVec3, Vec2};
+use image::{EncodableLayout, ImageBuffer, Rgba};
+use wgpu::{util::DeviceExt, BindGroupLayoutEntry};
 
 /// A [`RenderClient`]'s "view" of a universe,
 /// that is, resources necessary for understanding what the palettized block group data represents.
@@ -38,7 +40,7 @@ impl UniverseRenderView {
             .iter()
             .filter_map(|block_type| match &block_type.appearance {
                 // TODO: Properly support these cuboid materials!
-                crate::resources::block_type::BlockAppearance::Cuboid { x_min, .. } => Some(x_min),
+                BlockAppearance::Cuboid { x_min, .. } => Some(x_min),
             })
             .map(|material_ref| {
                 materials

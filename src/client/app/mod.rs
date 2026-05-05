@@ -1,10 +1,23 @@
+//! # Application
+//!
+//! For GUI clients, a window will be created with `winit` that will forward inputs to the client's thread,
+//! and transparently present whatever the client renders.
+//!
+//! Note that [`Application`] hijacks (and therefore must be run on) the main thread and, thus,
+//! isn't suitable for heavy multithreading work. So on the main thread, nothing is run but [`Application`],
+//! and it does nothing but interface with the user.
+
+use crate::client::{
+    app::render::{GameRenderState, Gpu},
+    gui::AppMessage,
+    render::render_target::window::WindowRenderTarget,
+};
+use glam::UVec2;
+use smol::channel::Sender;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-
-use glam::UVec2;
-use smol::channel::Sender;
 use tracing::{info, info_span};
 use winit::{
     application::ApplicationHandler,
@@ -12,16 +25,6 @@ use winit::{
     event::WindowEvent,
     event_loop::EventLoop,
     window::{Window, WindowAttributes},
-};
-
-use crate::{
-    client::{
-        app::render::{render_target::window::WindowRenderTarget, Gpu, RenderClient},
-        gui::{AppMessage, Client},
-        GameView,
-    },
-    resources::universe::Universe,
-    world::World,
 };
 
 pub mod render;
@@ -36,7 +39,7 @@ pub struct Application {
 pub struct ApplicationState {
     gpu: Gpu,
     pub window: Arc<Window>,
-    pub render_client: RenderClient,
+    pub render_client: GameRenderState,
     // TODO: Maybe move these to the RenderClient itself,
     // and in the application just call `RenderClient::tick`
     // and then the client handles FPS and whatnot.
@@ -83,7 +86,7 @@ impl ApplicationState {
         let render_target =
             WindowRenderTarget::new(window.inner_size(), surface, surface_format, &gpu.device);
 
-        let render_client = pollster::block_on(RenderClient::new(&gpu, render_target));
+        let render_client = pollster::block_on(GameRenderState::new(&gpu, render_target));
 
         info!("Gathering information from the server...");
 
@@ -96,41 +99,6 @@ impl ApplicationState {
             time_of_last_tick: Instant::now(),
             frame_time_accumulator: Duration::from_millis(0),
             gpu,
-        }
-    }
-
-    #[deprecated]
-    #[allow(unused)]
-    fn prepare_from_scratch_for_server(
-        &self,
-        render_client: &mut RenderClient,
-        client: &mut Client,
-    ) {
-        if let Some(server) = &client.server_interface {
-            // TODO: Stream resources from the server on another thread
-            // so we don't lag while waiting for resources.
-            let universe = Universe::example();
-
-            // So, we're creating a dummy world here...
-            //
-            // In reality, joining a world will be a message incoming from the server.
-            let world = World::example();
-            // Loading a first scene from a world will also be decided by the Universe.
-            let scene = world.scenes.get("default").cloned().unwrap();
-
-            let game_view = GameView {
-                current_universe: universe,
-                current_world: world,
-                current_scene: scene,
-            };
-
-            // TODO: Introduce granular updates to the content of the render client.
-            #[allow(deprecated)]
-            render_client.prepare_from_scratch(&self.gpu, &game_view);
-
-            client.game_resources = Some(game_view);
-        } else {
-            info!("No server connected.");
         }
     }
 

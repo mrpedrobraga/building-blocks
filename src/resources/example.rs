@@ -3,13 +3,13 @@ use indexmap::{indexset, IndexMap};
 
 use crate::{
     resources::{
-        block_type::{BlockAppearance, BlockTypeDefinition},
+        block_type::BlockTypeDefinition,
         data_pack::DataPack,
         material::{MaterialDefinition, MaterialRef},
         texture::{Rect, TextureDefinition, TextureRef},
         universe::Universe,
     },
-    world::block::BlockType,
+    world::block::{BlockAppearance, BlockType},
 };
 
 impl Universe {
@@ -52,26 +52,9 @@ impl Universe {
             BlockTypeDefinition {
                 id: "toyvox:dirt".to_string(),
                 display_name: "Dirt".to_string(),
-                appearance: BlockAppearance::Cuboid {
-                    x_min: MaterialRef {
-                        id: String::from("toyvox:dirt"),
-                    },
-                    x_max: MaterialRef {
-                        id: String::from("toyvox:dirt"),
-                    },
-                    y_min: MaterialRef {
-                        id: String::from("toyvox:dirt"),
-                    },
-                    y_max: MaterialRef {
-                        id: String::from("toyvox:dirt"),
-                    },
-                    z_min: MaterialRef {
-                        id: String::from("toyvox:dirt"),
-                    },
-                    z_max: MaterialRef {
-                        id: String::from("toyvox:dirt"),
-                    },
-                },
+                appearance: BlockAppearance::homogeneous(MaterialRef {
+                    id: String::from("toyvox:dirt"),
+                }),
             },
         );
 
@@ -80,26 +63,9 @@ impl Universe {
             BlockTypeDefinition {
                 id: "toyvox:grassy_dirt".to_string(),
                 display_name: "Grassy Dirt".to_string(),
-                appearance: BlockAppearance::Cuboid {
-                    x_min: MaterialRef {
-                        id: String::from("toyvox:grassy_dirt"),
-                    },
-                    x_max: MaterialRef {
-                        id: String::from("toyvox:grassy_dirt"),
-                    },
-                    y_min: MaterialRef {
-                        id: String::from("toyvox:grassy_dirt"),
-                    },
-                    y_max: MaterialRef {
-                        id: String::from("toyvox:grassy_dirt"),
-                    },
-                    z_min: MaterialRef {
-                        id: String::from("toyvox:grassy_dirt"),
-                    },
-                    z_max: MaterialRef {
-                        id: String::from("toyvox:grassy_dirt"),
-                    },
-                },
+                appearance: BlockAppearance::homogeneous(MaterialRef {
+                    id: String::from("toyvox:grassy_dirt"),
+                }),
             },
         );
 

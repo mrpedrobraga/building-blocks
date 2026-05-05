@@ -6,24 +6,22 @@
 
 use crate::{
     client::{
-        app::render::views::{BlockGroupRenderView, SceneRenderView, UniverseRenderView},
-        GameView,
+        app::render::views::{SceneRenderView, UniverseRenderView},
+        render::render_target::{window::WindowRenderTarget, RenderTarget, TextureViewSet},
     },
     world::camera::{Camera, CameraProjection},
 };
 use glam::{Quat, UVec2, Vec3};
-use tracing::{info, info_span};
+use tracing::info_span;
 use wgpu::{Device, Queue};
 use winit::dpi::PhysicalSize;
 use {
     pipeline::pixels::SquaresPipeline,
     pipeline::voxels::{GlobalUniforms, VoxelPipeline},
-    render_target::{window::WindowRenderTarget, RenderTarget, TextureViewSet},
 };
 
 pub mod pipeline;
-pub mod render_target;
-
+#[deprecated]
 pub mod views;
 
 pub struct Gpu {
@@ -40,7 +38,7 @@ impl Gpu {
 /// The main struct of this module!
 ///
 /// See the module-level documentation.
-pub struct RenderClient {
+pub struct GameRenderState {
     pub window_render_target: WindowRenderTarget,
 
     global_uniforms: GlobalUniforms,
@@ -53,7 +51,7 @@ pub struct RenderClient {
     pub block_group_pipeline: Option<VoxelPipeline>,
 }
 
-impl RenderClient {
+impl GameRenderState {
     /// Creates a new render client holding onto a window.
     pub async fn new(gpu: &Gpu, render_target: WindowRenderTarget) -> Self {
         // We create an empty uniform buffer (we'll write to it before rendering for the first time, dw!)
@@ -111,79 +109,77 @@ impl RenderClient {
         );
     }
 
-    /// Creates render views from a client's view of a world.
-    #[deprecated]
-    pub fn prepare_from_scratch(&mut self, gpu: &Gpu, game_view: &GameView) {
-        let s = info_span!("render client preparing from scratch");
-        let _ = s.enter();
+    // /// Creates render views from a client's view of a world.
+    // #[deprecated]
+    // pub fn prepare_from_scratch(&mut self, gpu: &Gpu, game_view: &GameView) {
+    //     let s = info_span!("render client preparing from scratch");
+    //     let _ = s.enter();
 
-        let screen_size = UVec2::new(
-            self.window_render_target.surface_size.width,
-            self.window_render_target.surface_size.height,
-        );
+    //     let screen_size = UVec2::new(
+    //         self.window_render_target.surface_size.width,
+    //         self.window_render_target.surface_size.height,
+    //     );
 
-        /* Creating 2D information!!! */
+    //     /* Creating 2D information!!! */
+    //     self.squares_pipeline = Some(SquaresPipeline::new(
+    //         &gpu,
+    //         self.window_render_target.surface_config.format,
+    //         screen_size,
+    //     ));
 
-        self.squares_pipeline = Some(SquaresPipeline::new(
-            &gpu,
-            self.window_render_target.surface_config.format,
-            screen_size,
-        ));
+    //     /* Creating 3D information!!! */
+    //     info!("Creating bind group layout.");
+    //     // It's possible to create these only once for ever I'm sure.
 
-        /* Creating 3D information!!! */
+    //     let universe_bind_group_layout = UniverseRenderView::bind_group_layout(&gpu);
+    //     let block_group_bind_group_layout = BlockGroupRenderView::bind_group_layout(&gpu);
 
-        info!("Creating bind group layout.");
-        // It's possible to create these only once for ever I'm sure.
+    //     // TODO: Get the camera from somewhere else lol.
+    //     let mut camera = Camera {
+    //         position: Vec3::new(10.0, 10.0, 10.0),
+    //         orientation: Quat::default(),
+    //         projection: CameraProjection::Perspective {
+    //             vertical_fov_radians: 60.0_f32.to_radians(),
+    //             z_near_clipping_plane: 0.1,
+    //             z_far_clipping_plane: 100.0,
+    //         },
+    //     };
+    //     camera.look_at(Vec3::new(1.5, 1.5, 1.5), Vec3::Z);
+    //     self.global_uniforms = GlobalUniforms {
+    //         view_matrix: camera.view_matrix(screen_size).to_cols_array(),
+    //         ..self.global_uniforms
+    //     };
+    //     self.sync_uniforms(gpu);
 
-        let universe_bind_group_layout = UniverseRenderView::bind_group_layout(&gpu);
-        let block_group_bind_group_layout = BlockGroupRenderView::bind_group_layout(&gpu);
+    //     info!("Creating render views!");
+    //     // These will be createed once but should be able to be updated incrementally
+    //     // especially through streaming...
+    //     //
+    //     // Ideally you'd get the correct "capacity" from upstream
+    //     // and then progressively send data to the gpu in another thread.
 
-        // TODO: Get the camera from somewhere else lol.
-        let mut camera = Camera {
-            position: Vec3::new(10.0, 10.0, 10.0),
-            orientation: Quat::default(),
-            projection: CameraProjection::Perspective {
-                vertical_fov_radians: 60.0_f32.to_radians(),
-                z_near_clipping_plane: 0.1,
-                z_far_clipping_plane: 100.0,
-            },
-        };
-        camera.look_at(Vec3::new(1.5, 1.5, 1.5), Vec3::Z);
-        self.global_uniforms = GlobalUniforms {
-            view_matrix: camera.view_matrix(screen_size).to_cols_array(),
-            ..self.global_uniforms
-        };
-        self.sync_uniforms(gpu);
+    //     let universe_render_view = UniverseRenderView::new(
+    //         &gpu,
+    //         &self.global_uniform_buffer,
+    //         &game_view.current_universe,
+    //         &universe_bind_group_layout,
+    //     );
+    //     let current_scene_render_view = SceneRenderView::new(
+    //         &gpu,
+    //         &game_view.current_scene,
+    //         &block_group_bind_group_layout,
+    //     );
 
-        info!("Creating render views!");
-        // These will be createed once but should be able to be updated incrementally
-        // especially through streaming...
-        //
-        // Ideally you'd get the correct "capacity" from upstream
-        // and then progressively send data to the gpu in another thread.
+    //     self.universe_render_view = Some(universe_render_view);
+    //     self.current_scene_render_view = Some(current_scene_render_view);
 
-        let universe_render_view = UniverseRenderView::new(
-            &gpu,
-            &self.global_uniform_buffer,
-            &game_view.current_universe,
-            &universe_bind_group_layout,
-        );
-        let current_scene_render_view = SceneRenderView::new(
-            &gpu,
-            &game_view.current_scene,
-            &block_group_bind_group_layout,
-        );
-
-        self.universe_render_view = Some(universe_render_view);
-        self.current_scene_render_view = Some(current_scene_render_view);
-
-        self.block_group_pipeline = Some(VoxelPipeline::new(
-            &gpu.device,
-            self.window_render_target.surface_config.format,
-            universe_bind_group_layout,
-            block_group_bind_group_layout,
-        ));
-    }
+    //     self.block_group_pipeline = Some(VoxelPipeline::new(
+    //         &gpu.device,
+    //         self.window_render_target.surface_config.format,
+    //         universe_bind_group_layout,
+    //         block_group_bind_group_layout,
+    //     ));
+    // }
 
     /// Draws onto the render target!
     pub fn draw(&mut self, gpu: &Gpu) {

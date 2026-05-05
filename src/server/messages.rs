@@ -17,6 +17,14 @@ pub enum ServerConnectionMessage {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum ServerUniverseMessage {
+    /// Declares the universe the server is using.
+    /// The client might already have it cached but if not,
+    /// the client can ask the server for data packs :-)
+    Let { id: String },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ServerWorldMessage {
     /// Client was transported to a new (or their first) world!
     EnterWorld {
