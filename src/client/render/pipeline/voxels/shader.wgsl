@@ -1,4 +1,4 @@
-struct BlockDefinition {
+struct BlockAppearance {
     material: RenderMaterial,
 };
 
@@ -7,7 +7,7 @@ struct RenderMaterial {
     atlas_size: vec2<f32>,
 };
 
-struct GlobalUniforms {
+struct WorldUniforms {
     view_proj: mat4x4<f32>,
     global_time: f32,
     _padding_0: f32,
@@ -21,13 +21,17 @@ struct BlockClusterUniforms {
     _padding: u32
 }
 
-@group(0) @binding(0) var<uniform> globals: GlobalUniforms;
-@group(0) @binding(1) var<storage, read> block_definitions: array<BlockDefinition>;
-@group(0) @binding(2) var material_atlas: texture_2d<f32>;
-@group(0) @binding(3) var material_atlas_s: sampler;
+/* Universe Bind Group */
+@group(0) @binding(0) var<storage, read> block_appearance_palette: array<BlockAppearance>;
+@group(0) @binding(1) var material_atlas: texture_2d<f32>;
+@group(0) @binding(2) var material_atlas_s: sampler;
 
-@group(1) @binding(0) var<uniform> block_group_uniforms: BlockClusterUniforms; 
-@group(1) @binding(1) var<storage, read> block_group_data: array<u32>;
+/* World Bind Group */
+@group(1) @binding(0) var<uniform> world_uniforms: WorldUniforms;
+
+/* Block Group Bind Group */
+@group(2) @binding(0) var<uniform> block_group_uniforms: BlockClusterUniforms; 
+@group(2) @binding(1) var<storage, read> block_group_data: array<u32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -100,7 +104,7 @@ fn vs_main(
     var world_pos = block_group_uniforms.transform * vec4<f32>(grid_pos + local_pos, 1.0);
 
     var out: VertexOutput;
-    out.clip_position = globals.view_proj * world_pos;
+    out.clip_position = world_uniforms.view_proj * world_pos;
     out.uv = UV_DATA[uv_idx];
     out.block_id = block_id;
     out.light_factor = FACE_LIGHTING[face_idx];
@@ -109,7 +113,7 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let material = block_definitions[in.block_id].material;
+    let material = block_appearance_palette[in.block_id].material;
     let atlas_pixel_size = vec2<f32>(textureDimensions(material_atlas));
     let atlas_uv = mix(material.atlas_position, material.atlas_position + material.atlas_size, in.uv) / atlas_pixel_size;
     let col = textureSample(material_atlas, material_atlas_s, atlas_uv);

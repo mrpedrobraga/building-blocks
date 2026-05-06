@@ -1,5 +1,5 @@
 use building_blocks::{
-    client::{Client, app::Application},
+    client::{app::Application, Client},
     resources::universe::Universe,
     server::{ClientInfo, UniverseServer},
 };

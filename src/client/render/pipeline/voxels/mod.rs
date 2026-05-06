@@ -17,8 +17,8 @@
 //!
 
 use wgpu::{
-    BindGroupLayout, Device, PipelineLayoutDescriptor, PrimitiveState, RenderPipeline,
-    RenderPipelineDescriptor, TextureFormat, include_wgsl,
+    include_wgsl, BindGroupLayout, Device, PipelineLayoutDescriptor, PrimitiveState,
+    RenderPipeline, RenderPipelineDescriptor, TextureFormat,
 };
 
 pub struct VoxelPipeline {
@@ -29,7 +29,7 @@ pub struct VoxelPipeline {
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct GlobalUniforms {
+pub struct WorldUniforms {
     pub view_matrix: [f32; 16],
     pub global_time: f32,
     pub _padding: [f32; 3],
@@ -40,6 +40,7 @@ impl VoxelPipeline {
         gpu_device: &Device,
         render_target_format: TextureFormat,
         universe_bind_group_layout: wgpu::BindGroupLayout,
+        world_bind_group_layout: wgpu::BindGroupLayout,
         block_group_bind_group_layout: wgpu::BindGroupLayout,
     ) -> Self {
         let shader = gpu_device.create_shader_module(include_wgsl!("shader.wgsl"));
@@ -48,6 +49,7 @@ impl VoxelPipeline {
             label: Some("Pipeline Layout Descriptor"),
             bind_group_layouts: &[
                 Some(&universe_bind_group_layout),
+                Some(&world_bind_group_layout),
                 Some(&block_group_bind_group_layout),
             ],
             immediate_size: 0,

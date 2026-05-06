@@ -173,7 +173,7 @@ pub struct ClientInfo {
 /// elsewhere.
 #[async_trait::async_trait]
 pub trait ServerInterface {
-    async fn recv(&self) -> Result<ServerMessage, RecvError>;
+    async fn next_message(&self) -> Result<ServerMessage, RecvError>;
 }
 
 /// A server that's "right here" in the same machine and process as the client.
@@ -207,7 +207,7 @@ impl LocalServerInterface {
 
 #[async_trait::async_trait]
 impl ServerInterface for LocalServerInterface {
-    async fn recv(&self) -> Result<ServerMessage, RecvError> {
+    async fn next_message(&self) -> Result<ServerMessage, RecvError> {
         self.client_channels.1.recv().await
     }
 }
@@ -218,7 +218,7 @@ pub struct RemoteServer {}
 
 #[async_trait::async_trait]
 impl ServerInterface for RemoteServer {
-    async fn recv(&self) -> Result<ServerMessage, RecvError> {
+    async fn next_message(&self) -> Result<ServerMessage, RecvError> {
         Err(RecvError)
     }
 }

@@ -13,7 +13,7 @@
 use glam::{Affine3A, UVec3, UVec4, Vec2};
 use serde::{Deserialize, Serialize};
 
-use crate::resources::{Id, block_type::BlockTypeDefinition, material::MaterialRef};
+use crate::resources::{block_type::BlockTypeDefinition, material::MaterialRef, Id};
 
 /// Information about what a given block "is":
 /// Its appearance, general information and physics;
@@ -66,7 +66,8 @@ impl BlockAppearance {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct RenderMaterial {
     pub atlas_position: Vec2,
     pub atlas_size: Vec2,

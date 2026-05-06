@@ -6,7 +6,7 @@ use self::render::gpu::GameRenderResources;
 use crate::{
     client::{app::AppMessage, render::GameRenderState, view::GameView},
     server::{
-        ClientInfo, LocalServerInterface, ServerInterface, UnknownMessage, messages::ServerMessage,
+        messages::ServerMessage, ClientInfo, LocalServerInterface, ServerInterface, UnknownMessage,
     },
 };
 use smol::channel::{Receiver, Sender};
@@ -26,7 +26,7 @@ pub struct Client {
     pub server_interface: Option<Box<dyn ServerInterface>>,
     pub app_msg_rx: Option<Receiver<AppMessage>>,
     pub game_view: GameView,
-    pub game_render_state: GameRenderState,
+    pub game_render_state: Option<GameRenderState>,
     pub game_renderer: Option<GameRenderResources>,
 }
 
@@ -36,7 +36,7 @@ impl Client {
             info,
             server_interface: None,
             game_view: GameView::new(),
-            game_render_state: GameRenderState::new(),
+            game_render_state: None,
             game_renderer: None,
             app_msg_rx: Some(app_msg_rx),
         }
@@ -65,7 +65,7 @@ impl Client {
         info!("[Client] Waiting for server messages.");
 
         loop {
-            let (Some(interface), Some(app_msg_rx)) =
+            let (Some(server_interface), Some(app_msg_rx)) =
                 (self.server_interface.as_ref(), self.app_msg_rx.as_ref())
             else {
                 break;
@@ -76,7 +76,7 @@ impl Client {
                 Server(ServerMessage),
             }
             let msg = smol::future::race(
-                async { interface.recv().await.map(Message::Server) },
+                async { server_interface.next_message().await.map(Message::Server) },
                 async { app_msg_rx.recv().await.map(Message::App) },
             )
             .await;
@@ -110,6 +110,9 @@ impl Client {
                 // the input map and send it to the server.
             }
             AppMessage::SetRenderTarget(gpu, window_render_target) => {
+                // TODO: Pass in the current GameView so we start with some data,
+                // then after that we do progressive patching.
+                self.game_render_state = Some(GameRenderState::new(&gpu));
                 self.game_renderer = Some(GameRenderResources::new(gpu, window_render_target));
             }
             AppMessage::ResizeRenderTarget(new_size) => {
@@ -118,9 +121,10 @@ impl Client {
                 }
             }
             AppMessage::PleaseRender => {
-                if let Some(game_renderer) = self.game_renderer.as_mut() {
-                    game_renderer.render(&self.game_render_state);
-                }
+                if let Some(game_renderer) = self.game_renderer.as_mut()
+                    && let Some(game_render_state) = self.game_render_state.as_ref() {
+                        game_renderer.render(game_render_state);
+                    }
             }
         }
     }

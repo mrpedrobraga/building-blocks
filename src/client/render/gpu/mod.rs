@@ -1,12 +1,12 @@
 use crate::client::render::render_target::RenderTarget;
 use glam::UVec2;
-use tracing::info;
+use tracing::{info, trace};
 use wgpu::{Device, Queue};
 
 use super::{
-    BlockGroupRenderState, GameRenderState, UniverseRenderState,
     pipeline::voxels::VoxelPipeline,
-    render_target::{TextureViewSet, window::WindowRenderTarget},
+    render_target::{window::WindowRenderTarget, TextureViewSet},
+    BlockGroupRenderState, GameRenderState, UniverseRenderState, WorldRenderState,
 };
 
 #[derive(Debug)]
@@ -29,13 +29,16 @@ pub struct GameRenderResources {
 
 impl GameRenderResources {
     pub fn new(gpu: Gpu, render_target: WindowRenderTarget) -> Self {
+        // TODO: Source these from somewhere instead of recreating them?
         let universe_bind_group_layout = UniverseRenderState::bind_group_layout(&gpu);
+        let world_bind_group_layout = WorldRenderState::bind_grop_layout(&gpu);
         let block_group_bind_group_layout = BlockGroupRenderState::bind_group_layout(&gpu);
 
         let voxel_pipeline = VoxelPipeline::new(
             &gpu.device,
             render_target.surface_config.format,
             universe_bind_group_layout,
+            world_bind_group_layout,
             block_group_bind_group_layout,
         );
 
@@ -47,7 +50,7 @@ impl GameRenderResources {
     }
 
     pub fn resize(&mut self, new_size: UVec2) {
-        info!("[Client] Resized to {:?}.", new_size);
+        info!("[Render] Resized to {:?}.", new_size);
 
         self.render_target.resize(
             &self.gpu.device,
@@ -72,7 +75,7 @@ impl GameRenderResources {
 
         let render_pass = self.render_pass(&mut command_encoder, &target_texture_set);
 
-        GameRenderResources::draw_sequence(render_pass);
+        self.draw_sequence(render_pass, _state);
 
         self.gpu
             .queue
@@ -83,8 +86,31 @@ impl GameRenderResources {
         }
     }
 
-    fn draw_sequence<'pass>(_render_pass: wgpu::RenderPass<'pass>) {
-        // TODO: Here we do all our draw calls...
+    fn draw_sequence<'pass>(
+        &self,
+        mut pass: wgpu::RenderPass<'pass>,
+        render_state: &GameRenderState,
+    ) {
+        /* Render all voxels from all block groups. */
+        trace!("[Render] Preparing to render voxels...");
+        pass.set_pipeline(&self.voxel_pipeline.render_pipeline);
+        pass.set_bind_group(0, &render_state.universe_state.bind_group, &[]);
+        pass.set_bind_group(1, &render_state.world_state.bind_group, &[]);
+
+        // TODO: Handle nested layouts.
+        // I'll possibly do this by keeping a running cache
+        // and allocating all the block groups of a scene into a single buffer.
+        for block_group in render_state
+            .world_state
+            .current_scene
+            .root_layout
+            .block_groups
+            .iter()
+        {
+            trace!("[Render] Rendering bind group...");
+            pass.set_bind_group(2, &block_group.bind_group, &[]);
+            pass.draw(0..36, 0..block_group.block_appearance_data.len() as u32);
+        }
     }
 
     fn render_pass<'pass>(
@@ -133,23 +159,13 @@ impl GameRenderResources {
 impl UniverseRenderState {
     pub fn bind_group_layout(gpu: &Gpu) -> wgpu::BindGroupLayout {
         /*
-            @group(0) @binding(0) var<uniform> globals: GlobalUniforms;
-            @group(0) @binding(1) var<storage, read> block_definitions: array<BlockDefinition>;
-            @group(0) @binding(2) var material_atlas: texture_2d<f32>;
-            @group(0) @binding(3) var material_atlas_s: sampler;
+            @group(0) @binding(0) var<storage, read> block_definitions: array<BlockDefinition>;
+            @group(0) @binding(1) var material_atlas: texture_2d<f32>;
+            @group(0) @binding(2) var material_atlas_s: sampler;
         */
-        let global_uniforms_entry = wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
+
         let block_definitions_entry = wgpu::BindGroupLayoutEntry {
-            binding: 1,
+            binding: 0,
             visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -159,7 +175,7 @@ impl UniverseRenderState {
             count: None,
         };
         let texture_atlas_view_entry = wgpu::BindGroupLayoutEntry {
-            binding: 2,
+            binding: 1,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -169,7 +185,7 @@ impl UniverseRenderState {
             count: None,
         };
         let texture_atlas_sampler_entry = wgpu::BindGroupLayoutEntry {
-            binding: 3,
+            binding: 2,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
             count: None,
@@ -178,11 +194,34 @@ impl UniverseRenderState {
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Universe Bind Group Layout"),
                 entries: &[
-                    global_uniforms_entry,
                     block_definitions_entry,
                     texture_atlas_view_entry,
                     texture_atlas_sampler_entry,
                 ],
+            })
+    }
+}
+
+impl WorldRenderState {
+    pub fn bind_grop_layout(gpu: &Gpu) -> wgpu::BindGroupLayout {
+        /*
+            @group(0) @binding(0) var<uniform> globals: GlobalUniforms;
+        */
+        let world_uniforms_entry = wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        gpu.device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("World Bind Grop Layout"),
+                entries: &[world_uniforms_entry],
             })
     }
 }

@@ -117,6 +117,7 @@ impl ApplicationHandler for Application {
                     // Concurrency is complex so I don't yet know what it means if this channel
                     // fails to send a message.
                 };
+                //event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
                 let message = AppMessage::PleaseRender;
@@ -125,6 +126,7 @@ impl ApplicationHandler for Application {
                     // TODO: Maybe quit?
                     // Concurrency is complex so I don't yet know what it means if this channel
                     // fails to send a message.
+                    //event_loop.exit();
                 };
             }
             event => {
@@ -134,6 +136,7 @@ impl ApplicationHandler for Application {
                     // TODO: Maybe quit?
                     // Concurrency is complex so I don't yet know what it means if this channel
                     // fails to send a message.
+                    //event_loop.exit();
                 };
             }
         }

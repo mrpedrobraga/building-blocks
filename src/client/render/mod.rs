@@ -1,6 +1,9 @@
+use self::pipeline::voxels::WorldUniforms;
+
 use super::view::{BlockTypeId, LayoutId, LayoutRef};
 use dashmap::DashMap;
 use glam::{UVec3, Vec2};
+use image::{ImageBuffer, Rgba};
 
 pub mod gpu;
 pub mod pipeline;
@@ -16,11 +19,21 @@ pub struct GameRenderState {
 
 pub struct UniverseRenderState {
     pub block_appearance_palette: DashMap<BlockTypeId, BlockAppearanceEntry>,
+    pub block_appearance_palette_gpu: wgpu::Buffer,
+
+    pub texture_atlas: ImageBuffer<Rgba<u8>, Vec<u8>>,
+    pub texture_atlas_gpu: wgpu::Texture,
+
+    pub bind_group: wgpu::BindGroup,
 }
 
 pub struct WorldRenderState {
     pub current_scene: CurrentSceneRenderState,
     pub layout_cache: DashMap<LayoutId, LayoutRenderState>,
+
+    pub uniforms: WorldUniforms,
+    pub uniforms_gpu: wgpu::Buffer,
+    pub bind_group: wgpu::BindGroup,
 }
 
 pub struct CurrentSceneRenderState {
