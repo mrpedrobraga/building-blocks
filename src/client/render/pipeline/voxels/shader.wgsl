@@ -8,7 +8,7 @@ struct RenderMaterial {
 };
 
 struct WorldUniforms {
-    view_proj: mat4x4<f32>,
+    view_matrix: mat4x4<f32>,
     global_time: f32,
     _padding_0: f32,
     _padding_1: f32,
@@ -104,17 +104,24 @@ fn vs_main(
     var world_pos = block_group_uniforms.transform * vec4<f32>(grid_pos + local_pos, 1.0);
 
     var out: VertexOutput;
-    out.clip_position = world_uniforms.view_proj * world_pos;
+    out.clip_position = world_uniforms.view_matrix * world_pos;
     out.uv = UV_DATA[uv_idx];
     out.block_id = block_id;
-    out.light_factor = FACE_LIGHTING[face_idx];
+    out.light_factor = 1.0;//FACE_LIGHTING[face_idx];
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    if (in.block_id >= /* Size of buffer */ 0) {
-        return vec4(1.0, 0.0, 1.0, 1.0);
+    let palette_length = arrayLength(&block_appearance_palette);
+    if (in.block_id >= palette_length) {
+        let grid = floor(in.uv * vec2(2.0));
+
+        if (i32(grid.x + grid.y) % 2 == 0) {
+            return vec4(0.0, 0.0, 0.0, 1.0);
+        } else {
+            return vec4(1.0, 0.0, 1.0, 1.0);
+        }
     }
 
     let material = block_appearance_palette[in.block_id].material;

@@ -31,7 +31,7 @@ impl GameRenderer {
     pub fn new(gpu: Gpu, render_target: WindowRenderTarget) -> Self {
         // TODO: Source these from somewhere instead of recreating them?
         let universe_bind_group_layout = UniverseRenderState::bind_group_layout(&gpu);
-        let world_bind_group_layout = WorldRenderState::bind_grop_layout(&gpu);
+        let world_bind_group_layout = WorldRenderState::bind_group_layout(&gpu);
         let block_group_bind_group_layout = BlockGroupRenderState::bind_group_layout(&gpu);
 
         let voxel_pipeline = VoxelPipeline::new(
@@ -159,7 +159,7 @@ impl GameRenderer {
 impl UniverseRenderState {
     pub fn bind_group_layout(gpu: &Gpu) -> wgpu::BindGroupLayout {
         /*
-            @group(0) @binding(0) var<storage, read> block_definitions: array<BlockDefinition>;
+            @group(0) @binding(0) var<storage, read> block_appearance_palette: array<BlockAppearance>;
             @group(0) @binding(1) var material_atlas: texture_2d<f32>;
             @group(0) @binding(2) var material_atlas_s: sampler;
         */
@@ -203,9 +203,9 @@ impl UniverseRenderState {
 }
 
 impl WorldRenderState {
-    pub fn bind_grop_layout(gpu: &Gpu) -> wgpu::BindGroupLayout {
+    pub fn bind_group_layout(gpu: &Gpu) -> wgpu::BindGroupLayout {
         /*
-            @group(0) @binding(0) var<uniform> globals: GlobalUniforms;
+            @group(1) @binding(0) var<uniform> world_uniforms: WorldUniforms;
         */
         let world_uniforms_entry = wgpu::BindGroupLayoutEntry {
             binding: 0,
@@ -229,8 +229,8 @@ impl WorldRenderState {
 impl BlockGroupRenderState {
     pub fn bind_group_layout(gpu: &Gpu) -> wgpu::BindGroupLayout {
         /*
-            @group(1) @binding(0) var<uniform> block_group_uniforms: BlockClusterUniforms;
-            @group(1) @binding(1) var<storage, read> block_group_appearance_data: array<u32>;
+            @group(2) @binding(0) var<uniform> block_group_uniforms: BlockClusterUniforms;
+            @group(2) @binding(1) var<storage, read> block_group_data: array<u32>;
         */
         let block_group_uniforms_entry = wgpu::BindGroupLayoutEntry {
             binding: 0,

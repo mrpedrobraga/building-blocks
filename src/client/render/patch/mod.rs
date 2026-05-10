@@ -117,20 +117,20 @@ impl UniverseRenderState {
 
 impl WorldRenderState {
     pub fn new(gpu: &Gpu) -> Self {
-        let bind_group_layout = WorldRenderState::bind_grop_layout(gpu);
+        let bind_group_layout = WorldRenderState::bind_group_layout(gpu);
 
         let view_matrix = {
             let screen_size = UVec2::new(640, 640);
             let mut cam = Camera::new(
-                Vec3::new(10.0, 0.0, 0.0),
+                Vec3::new(5.0, 5.0, 5.0),
                 Quat::default(),
                 CameraProjection::Perspective {
                     vertical_fov_radians: 60.0_f32.to_radians(),
-                    z_near_clipping_plane: 0.01,
+                    z_near_clipping_plane: 0.1,
                     z_far_clipping_plane: 100.0,
                 },
             );
-            cam.look_at(Vec3::new(1.5, 1.5, 1.5), Vec3::Y);
+            cam.look_at(Vec3::new(1.5, 1.5, 1.5), Vec3::Z);
             cam.view_matrix(screen_size).to_cols_array()
         };
 
@@ -145,7 +145,7 @@ impl WorldRenderState {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("World Uniforms Buffer"),
                 contents: bytemuck::cast_slice(&[uniforms]),
-                usage: wgpu::BufferUsages::UNIFORM,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
         let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -176,7 +176,7 @@ impl WorldRenderState {
                 self.layout_cache = DashMap::new();
             }
             ServerWorldMessage::CurrentScene(server_scene_message) => {
-                self.current_scene.patch(server_scene_message)
+                self.current_scene.patch(gpu, server_scene_message)
             }
         }
     }
@@ -190,11 +190,11 @@ impl CurrentSceneRenderState {
         }
     }
 
-    pub fn patch(&mut self, message: &ServerSceneMessage) {
+    pub fn patch(&mut self, gpu: &Gpu, message: &ServerSceneMessage) {
         match message {
             ServerSceneMessage::EnterScene { .. } | ServerSceneMessage::LeaveScene {} => {
                 self.environment = EnvironmentRenderState {};
-                self.root_layout = LayoutRenderState::new();
+                self.root_layout = LayoutRenderState::example(gpu);
             }
             ServerSceneMessage::BlockGroup(_server_block_group_message) => {
                 // TODO: Handle this I guess?
@@ -246,7 +246,7 @@ impl BlockGroupRenderState {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Block Group Uniform Buffer"),
                 contents: bytemuck::cast_slice(&[uniforms]),
-                usage: wgpu::BufferUsages::UNIFORM,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
         // TODO: Preallocate more space.
         let block_appearance_data = Vec::new();
@@ -295,28 +295,28 @@ impl BlockGroupRenderState {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Block Group Uniform Buffer"),
                 contents: bytemuck::cast_slice(&[uniforms]),
-                usage: wgpu::BufferUsages::UNIFORM,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
         // TODO: Preallocate more space.
         let block_appearance_data = vec![
             BlockAppearanceEntry { idx_in_palette: 1 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
             BlockAppearanceEntry { idx_in_palette: 1 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
             BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
             BlockAppearanceEntry { idx_in_palette: 1 },
             //
             BlockAppearanceEntry { idx_in_palette: 1 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
             BlockAppearanceEntry { idx_in_palette: 1 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
             BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
+            BlockAppearanceEntry { idx_in_palette: 0 },
             BlockAppearanceEntry { idx_in_palette: 1 },
             //
             BlockAppearanceEntry { idx_in_palette: 1 },

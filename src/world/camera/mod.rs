@@ -59,7 +59,11 @@ impl Camera {
     /// Because a camera looking at a point still has one degree of freedom (the roll),
     /// this function requires `up`, a normalized vector that further constrains the camera.
     pub fn look_at(&mut self, target: Vec3, up: Vec3) {
-        self.orientation = Quat::look_at_lh(self.position, target, up)
+        let dir = (target - self.position).normalize();
+        let right = up.cross(dir).normalize();
+        let new_up = dir.cross(right);
+        let mat = Mat3::from_cols(right, new_up, dir);
+        self.orientation = Quat::from_mat3(&mat);
     }
 
     /// Returns the view matrix of this camera, used for rendering.
