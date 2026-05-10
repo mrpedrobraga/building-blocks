@@ -113,6 +113,10 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    if (in.block_id >= /* Size of buffer */ 0) {
+        return vec4(1.0, 0.0, 1.0, 1.0);
+    }
+
     let material = block_appearance_palette[in.block_id].material;
     let atlas_pixel_size = vec2<f32>(textureDimensions(material_atlas));
     let atlas_uv = mix(material.atlas_position, material.atlas_position + material.atlas_size, in.uv) / atlas_pixel_size;

@@ -3,19 +3,19 @@
 use crate::client::render::render_target::{GetTextureError, RenderTarget, TextureViewSet};
 use tracing::warn;
 use wgpu::{Device, Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages};
-use winit::dpi::PhysicalSize;
+use winit::dpi::LogicalSize;
 
 #[derive(Debug)]
 pub struct WindowRenderTarget {
     pub(crate) surface: Surface<'static>,
     pub(crate) depth_texture: Texture,
     pub(crate) surface_config: SurfaceConfiguration,
-    pub surface_size: PhysicalSize<u32>,
+    pub surface_size: LogicalSize<u32>,
 }
 
 impl WindowRenderTarget {
     pub fn new(
-        size: PhysicalSize<u32>,
+        size: LogicalSize<u32>,
         surface: Surface<'static>,
         format: TextureFormat,
         device: &Device,
@@ -42,7 +42,7 @@ impl WindowRenderTarget {
         }
     }
 
-    pub fn configure(&mut self, device: &Device, new_size: PhysicalSize<u32>) {
+    pub fn configure(&mut self, device: &Device, new_size: LogicalSize<u32>) {
         self.surface_size = new_size;
         self.surface_config.width = new_size.width;
         self.surface_config.height = new_size.height;
@@ -72,7 +72,7 @@ impl WindowRenderTarget {
         device.create_texture(&descriptor)
     }
 
-    pub fn resize(&mut self, gpu_device: &wgpu::Device, new_size: PhysicalSize<u32>) {
+    pub fn resize(&mut self, gpu_device: &wgpu::Device, new_size: LogicalSize<u32>) {
         self.configure(gpu_device, new_size);
     }
 

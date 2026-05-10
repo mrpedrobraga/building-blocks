@@ -15,7 +15,6 @@ fn main() {
         let server_task = async move {
             let universe = Universe::example();
             let server = UniverseServer::new(universe, unknown_msg_rx);
-
             server.run().await;
         };
 

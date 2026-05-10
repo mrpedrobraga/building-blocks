@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tracing::{error, info, info_span};
 use winit::{
     application::ApplicationHandler,
-    dpi::PhysicalSize,
+    dpi::LogicalSize,
     event::WindowEvent,
     event_loop::EventLoop,
     window::{Window, WindowAttributes},
@@ -57,7 +57,7 @@ impl ApplicationHandler for Application {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         if self.window.is_none() {
             /* Create the window that catches inputs and renders whatever the client renders. */
-            let starting_size = PhysicalSize::new(640, 640);
+            let starting_size = LogicalSize::new(640, 640);
             let window = event_loop
                 .create_window(
                     WindowAttributes::default()
@@ -87,7 +87,8 @@ impl ApplicationHandler for Application {
 
             /* Give the client the render target or close. */
             let message = AppMessage::SetRenderTarget(gpu, _render_target);
-            if smol::block_on(self.gui_message_tx.send(message)).is_err() {
+            let set_render_target_msg_res = smol::block_on(self.gui_message_tx.send(message));
+            if set_render_target_msg_res.is_err() {
                 error!(
                     "[App] Failed to initialize — couldn't set the render target on the client..."
                 );
@@ -126,7 +127,7 @@ impl ApplicationHandler for Application {
                     // TODO: Maybe quit?
                     // Concurrency is complex so I don't yet know what it means if this channel
                     // fails to send a message.
-                    //event_loop.exit();
+                    event_loop.exit();
                 };
             }
             event => {
@@ -136,7 +137,7 @@ impl ApplicationHandler for Application {
                     // TODO: Maybe quit?
                     // Concurrency is complex so I don't yet know what it means if this channel
                     // fails to send a message.
-                    //event_loop.exit();
+                    event_loop.exit();
                 };
             }
         }

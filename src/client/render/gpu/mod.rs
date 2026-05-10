@@ -21,13 +21,13 @@ impl Gpu {
     }
 }
 
-pub struct GameRenderResources {
+pub struct GameRenderer {
     pub gpu: Gpu,
     pub render_target: WindowRenderTarget,
     pub voxel_pipeline: VoxelPipeline,
 }
 
-impl GameRenderResources {
+impl GameRenderer {
     pub fn new(gpu: Gpu, render_target: WindowRenderTarget) -> Self {
         // TODO: Source these from somewhere instead of recreating them?
         let universe_bind_group_layout = UniverseRenderState::bind_group_layout(&gpu);
@@ -42,7 +42,7 @@ impl GameRenderResources {
             block_group_bind_group_layout,
         );
 
-        GameRenderResources {
+        GameRenderer {
             gpu,
             render_target,
             voxel_pipeline,
@@ -54,7 +54,7 @@ impl GameRenderResources {
 
         self.render_target.resize(
             &self.gpu.device,
-            winit::dpi::PhysicalSize::new(new_size.x, new_size.y),
+            winit::dpi::LogicalSize::new(new_size.x, new_size.y),
         );
 
         // TODO: Update and sync uniforms that depend on screen size.
@@ -230,7 +230,7 @@ impl BlockGroupRenderState {
     pub fn bind_group_layout(gpu: &Gpu) -> wgpu::BindGroupLayout {
         /*
             @group(1) @binding(0) var<uniform> block_group_uniforms: BlockClusterUniforms;
-            @group(1) @binding(1) var<storage, read> block_group_data: array<u32>;
+            @group(1) @binding(1) var<storage, read> block_group_appearance_data: array<u32>;
         */
         let block_group_uniforms_entry = wgpu::BindGroupLayoutEntry {
             binding: 0,

@@ -2,7 +2,7 @@
 //!
 //! Traits and structs for clients which are players' way of interacting with a universe through a central authority (a server).
 
-use self::render::gpu::GameRenderResources;
+use self::render::gpu::GameRenderer;
 use crate::{
     client::{app::AppMessage, render::GameRenderState, view::GameView},
     server::{
@@ -27,7 +27,7 @@ pub struct Client {
     pub app_msg_rx: Option<Receiver<AppMessage>>,
     pub game_view: GameView,
     pub game_render_state: Option<GameRenderState>,
-    pub game_renderer: Option<GameRenderResources>,
+    pub game_renderer: Option<GameRenderer>,
 }
 
 impl Client {
@@ -113,7 +113,7 @@ impl Client {
                 // TODO: Pass in the current GameView so we start with some data,
                 // then after that we do progressive patching.
                 self.game_render_state = Some(GameRenderState::new(&gpu));
-                self.game_renderer = Some(GameRenderResources::new(gpu, window_render_target));
+                self.game_renderer = Some(GameRenderer::new(gpu, window_render_target));
             }
             AppMessage::ResizeRenderTarget(new_size) => {
                 if let Some(game_renderer) = self.game_renderer.as_mut() {
