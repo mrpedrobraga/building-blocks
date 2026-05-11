@@ -290,7 +290,7 @@ impl BlockGroupRenderState {
     }
 
     pub fn example(gpu: &Gpu) -> Self {
-        let block_group_size = UVec3::new(50, 50, 50);
+        let block_group_size = UVec3::new(25, 25, 25);
         let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
 
         let uniforms = BlockGroupUniforms {

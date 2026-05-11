@@ -36,8 +36,8 @@ struct BlockClusterUniforms {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) @interpolate(perspective) uv: vec2<f32>,
-    @location(1) block_id: u32,
-    @location(2) light_factor: f32,
+    @location(1) @interpolate(perspective) normal: vec3<f32>,
+    @location(2) block_id: u32,
 };
 
 const POSITIONS = array<vec3<f32>, 8>(
@@ -74,8 +74,13 @@ const UV_DATA = array<vec2<f32>, 6>(
     vec2<f32>(0.0, 0.0)// 3: Top-Left
 );
 
-const FACE_LIGHTING = array<f32, 6>(
-    0.5, 0.8, 0.8, 0.7, 0.7, 1.0
+const FACE_NORMALS = array<vec3<f32>, 6>(
+    vec3<f32>(0.0, 0.0, -1.0),
+    vec3<f32>(0.0, 0.0, 1.0),
+    vec3<f32>(-1.0, 0.0, 0.0),
+    vec3<f32>(1.0, 0.0, 0.0),
+    vec3<f32>(0.0, -1.0, 0.0),
+    vec3<f32>(0.0, 1.0, 0.0)
 );
 
 @vertex
@@ -85,7 +90,7 @@ fn vs_main(
 ) -> VertexOutput {
     let raw_block_id = block_group_data[i_idx];
     if raw_block_id == 0u {
-        return VertexOutput(vec4<f32>(0.0), vec2<f32>(0.0), 0, 0.0);
+        return VertexOutput(vec4<f32>(0.0), vec2<f32>(0.0), vec3<f32>(0.0), 0);
     }
     let block_id = raw_block_id - 1;
 
@@ -107,7 +112,7 @@ fn vs_main(
     out.clip_position = world_uniforms.view_matrix * world_pos;
     out.uv = UV_DATA[uv_idx];
     out.block_id = block_id;
-    out.light_factor = 1.0;//FACE_LIGHTING[face_idx];
+    out.normal = FACE_NORMALS[face_idx];
     return out;
 }
 
@@ -128,5 +133,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let atlas_pixel_size = vec2<f32>(textureDimensions(material_atlas));
     let atlas_uv = mix(material.atlas_position, material.atlas_position + material.atlas_size, in.uv) / atlas_pixel_size;
     let col = textureSample(material_atlas, material_atlas_s, atlas_uv);
-    return col * in.light_factor;
+    return col;
 }
