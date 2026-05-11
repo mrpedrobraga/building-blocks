@@ -1,3 +1,5 @@
+use std::ops::Div;
+
 use glam::{Mat4, Quat, UVec2, Vec3};
 use wgpu::util::DeviceExt;
 
@@ -119,18 +121,24 @@ impl WorldRenderState {
     pub fn new(gpu: &Gpu) -> Self {
         let bind_group_layout = WorldRenderState::bind_group_layout(gpu);
 
+        let current_scene = CurrentSceneRenderState::new(gpu);
+        let layout_cache = DashMap::new();
+
+        let block_group = &current_scene.root_layout.block_groups[0];
+        let block_group_size = block_group.uniforms.size.as_vec3();
+
         let view_matrix = {
             let screen_size = UVec2::new(640, 640);
             let mut cam = Camera::new(
-                Vec3::new(5.0, 5.0, 5.0),
+                block_group_size * 1.2,
                 Quat::default(),
                 CameraProjection::Perspective {
                     vertical_fov_radians: 60.0_f32.to_radians(),
                     z_near_clipping_plane: 0.1,
-                    z_far_clipping_plane: 100.0,
+                    z_far_clipping_plane: 10000.0,
                 },
             );
-            cam.look_at(Vec3::new(1.5, 1.5, 1.5), Vec3::Z);
+            cam.look_at(block_group_size * 0.5, Vec3::Z);
             cam.view_matrix(screen_size).to_cols_array()
         };
 
@@ -156,9 +164,6 @@ impl WorldRenderState {
                 resource: uniforms_gpu.as_entire_binding(),
             }],
         });
-
-        let current_scene = CurrentSceneRenderState::new(gpu);
-        let layout_cache = DashMap::new();
 
         Self {
             current_scene,
@@ -285,9 +290,12 @@ impl BlockGroupRenderState {
     }
 
     pub fn example(gpu: &Gpu) -> Self {
+        let block_group_size = UVec3::new(50, 50, 50);
+        let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
+
         let uniforms = BlockGroupUniforms {
             transform: Mat4::IDENTITY.to_cols_array(),
-            size: UVec3::new(3, 3, 3),
+            size: block_group_size,
             _padding: 0,
         };
         let uniforms_gpu = gpu
@@ -298,38 +306,21 @@ impl BlockGroupRenderState {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
         // TODO: Preallocate more space.
-        let block_appearance_data = vec![
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            //
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 0 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            //
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            BlockAppearanceEntry { idx_in_palette: 1 },
-            //
-        ];
+        let blocks_iter = (0..block_group_size.z)
+            .flat_map(|z| (0..block_group_size.y).map(move |y| (z, y)))
+            .flat_map(move |(z, y)| (0..block_group_size.x).map(move |x| (z, y, x)));
+        let block_appearance_data = blocks_iter
+            .map(|(z, y, x)| {
+                let point = Vec3::new(x as f32, y as f32, z as f32);
+                if point.distance_squared(block_group_half_size) > block_group_half_size.x.powf(2.0)
+                {
+                    BlockAppearanceEntry { idx_in_palette: 0 }
+                } else {
+                    BlockAppearanceEntry { idx_in_palette: 1 }
+                }
+            })
+            .collect::<Vec<_>>();
+
         let block_appearance_data_gpu =
             gpu.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
