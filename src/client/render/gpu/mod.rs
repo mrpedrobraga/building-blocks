@@ -1,6 +1,6 @@
 use crate::client::render::render_target::RenderTarget;
 use glam::UVec2;
-use tracing::{info, trace};
+use tracing::{trace};
 use wgpu::{Device, Queue};
 
 use super::{
@@ -50,12 +50,7 @@ impl GameRenderer {
     }
 
     pub fn resize(&mut self, new_size: UVec2) {
-        info!("[Render] Resized to {:?}.", new_size);
-
-        self.render_target.resize(
-            &self.gpu.device,
-            winit::dpi::LogicalSize::new(new_size.x, new_size.y),
-        );
+        self.render_target.resize(&self.gpu.device, new_size);
 
         // TODO: Update and sync uniforms that depend on screen size.
     }
@@ -234,7 +229,7 @@ impl BlockGroupRenderState {
         */
         let block_group_uniforms_entry = wgpu::BindGroupLayoutEntry {
             binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
+            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
                 has_dynamic_offset: false,

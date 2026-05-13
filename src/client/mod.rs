@@ -9,6 +9,7 @@ use crate::{
         messages::ServerMessage, ClientInfo, LocalServerInterface, ServerInterface, UnknownMessage,
     },
 };
+use glam::UVec2;
 use smol::channel::{Receiver, Sender};
 use std::pin::Pin;
 use tracing::{info, info_span, trace};
@@ -122,7 +123,9 @@ impl Client {
             }
             AppMessage::PleaseRender => {
                 if let Some(game_renderer) = self.game_renderer.as_mut()
-                    && let Some(game_render_state) = self.game_render_state.as_ref() {
+                    && let Some(game_render_state) = self.game_render_state.as_mut() {
+                        let screen_size = game_renderer.render_target.surface_size;
+                        game_render_state.world_state.tick(&game_renderer.gpu, UVec2::new(screen_size.width, screen_size.height));
                         game_renderer.render(game_render_state);
                     }
             }

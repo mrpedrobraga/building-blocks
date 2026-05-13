@@ -1,6 +1,7 @@
 //! This game is famously known for having things be drawn to the window!
 
 use crate::client::render::render_target::{GetTextureError, RenderTarget, TextureViewSet};
+use glam::UVec2;
 use tracing::warn;
 use wgpu::{Device, Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages};
 use winit::dpi::LogicalSize;
@@ -42,10 +43,13 @@ impl WindowRenderTarget {
         }
     }
 
-    pub fn configure(&mut self, device: &Device, new_size: LogicalSize<u32>) {
-        self.surface_size = new_size;
-        self.surface_config.width = new_size.width;
-        self.surface_config.height = new_size.height;
+    pub fn configure(&mut self, device: &Device, new_size: UVec2) {
+        self.surface_size = LogicalSize {
+            width: new_size.x,
+            height: new_size.y,
+        };
+        self.surface_config.width = new_size.x;
+        self.surface_config.height = new_size.y;
         self.surface.configure(device, &self.surface_config);
         self.depth_texture = Self::create_depth_texture(device, &self.surface_config);
     }
@@ -72,7 +76,7 @@ impl WindowRenderTarget {
         device.create_texture(&descriptor)
     }
 
-    pub fn resize(&mut self, gpu_device: &wgpu::Device, new_size: LogicalSize<u32>) {
+    pub fn resize(&mut self, gpu_device: &wgpu::Device, new_size: UVec2) {
         self.configure(gpu_device, new_size);
     }
 

@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use self::pipeline::voxels::WorldUniforms;
 
 use super::view::{BlockTypeId, LayoutId, LayoutRef};
@@ -34,6 +36,7 @@ pub struct WorldRenderState {
     pub uniforms: WorldUniforms,
     pub uniforms_gpu: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
+    pub beggining: Instant,
 }
 
 pub struct CurrentSceneRenderState {

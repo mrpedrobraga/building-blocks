@@ -1,4 +1,4 @@
-use std::ops::Div;
+use std::ops::{Div, Mul};
 
 use glam::{Mat4, Quat, UVec2, Vec3};
 use wgpu::util::DeviceExt;
@@ -127,20 +127,7 @@ impl WorldRenderState {
         let block_group = &current_scene.root_layout.block_groups[0];
         let block_group_size = block_group.uniforms.size.as_vec3();
 
-        let view_matrix = {
-            let screen_size = UVec2::new(640, 640);
-            let mut cam = Camera::new(
-                block_group_size * 1.2,
-                Quat::default(),
-                CameraProjection::Perspective {
-                    vertical_fov_radians: 60.0_f32.to_radians(),
-                    z_near_clipping_plane: 0.1,
-                    z_far_clipping_plane: 10000.0,
-                },
-            );
-            cam.look_at(block_group_size * 0.5, Vec3::Z);
-            cam.view_matrix(screen_size).to_cols_array()
-        };
+        let view_matrix = camera_orbit(block_group_size, 0.0, UVec2::new(640, 640));
 
         let uniforms = WorldUniforms {
             view_matrix,
@@ -171,7 +158,30 @@ impl WorldRenderState {
             uniforms,
             uniforms_gpu,
             bind_group,
+            beggining: Instant::now(),
         }
+    }
+
+    pub fn tick(&mut self, gpu: &Gpu, screen_size: UVec2) {
+        let block_group_size = self.current_scene.root_layout.block_groups[0]
+            .uniforms
+            .size
+            .as_vec3();
+
+        let view_matrix = camera_orbit(
+            block_group_size,
+            self.beggining.elapsed().as_secs_f32(),
+            screen_size,
+        );
+
+        let uniforms = WorldUniforms {
+            view_matrix,
+            global_time: self.beggining.elapsed().as_secs_f32(),
+            _padding: [0.0, 0.0, 0.0],
+        };
+
+        gpu.queue
+            .write_buffer(&self.uniforms_gpu, 0, bytemuck::cast_slice(&[uniforms]));
     }
 
     pub fn patch(&mut self, gpu: &Gpu, message: &ServerWorldMessage) {
@@ -185,6 +195,20 @@ impl WorldRenderState {
             }
         }
     }
+}
+
+fn camera_orbit(block_group_size: Vec3, time: f32, screen_size: UVec2) -> [f32; 16] {
+    let mut cam = Camera::new(
+        block_group_size.rotate_z(time).mul(1.2),
+        Quat::default(),
+        CameraProjection::Perspective {
+            vertical_fov_radians: 60.0_f32.to_radians(),
+            z_near_clipping_plane: 0.1,
+            z_far_clipping_plane: 10000.0,
+        },
+    );
+    cam.look_at(Vec3::ZERO, Vec3::Z);
+    cam.view_matrix(screen_size).to_cols_array()
 }
 
 impl CurrentSceneRenderState {
@@ -294,7 +318,7 @@ impl BlockGroupRenderState {
         let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
 
         let uniforms = BlockGroupUniforms {
-            transform: Mat4::IDENTITY.to_cols_array(),
+            transform: Mat4::from_translation(block_group_size.as_vec3().mul(-0.5)).to_cols_array(),
             size: block_group_size,
             _padding: 0,
         };

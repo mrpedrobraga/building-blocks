@@ -10,7 +10,7 @@
 use crate::client::render::{gpu::Gpu, render_target::window::WindowRenderTarget};
 use glam::UVec2;
 use smol::channel::Sender;
-use std::sync::Arc;
+use std::{sync::Arc, time::{Duration, Instant}};
 use tracing::{error, info, info_span};
 use winit::{
     application::ApplicationHandler,
@@ -23,6 +23,7 @@ use winit::{
 pub struct Application {
     pub gui_message_tx: Sender<AppMessage>,
     pub window: Option<Arc<Window>>,
+    pub last_frame_moment: Instant,
 }
 
 #[derive(Debug)]
@@ -46,6 +47,7 @@ impl Application {
             .run_app(&mut Application {
                 gui_message_tx,
                 window: None,
+                last_frame_moment: Instant::now(),
             })
             .unwrap();
 
@@ -112,31 +114,24 @@ impl ApplicationHandler for Application {
             WindowEvent::Resized(new_size) => {
                 let message =
                     AppMessage::ResizeRenderTarget(UVec2::new(new_size.width, new_size.height));
-                if smol::block_on(self.gui_message_tx.send(message)).is_err() {
+                if (self.gui_message_tx.send_blocking(message)).is_err() {
                     error!("[App] Failed to request the client to resize...");
-                    // TODO: Maybe quit?
-                    // Concurrency is complex so I don't yet know what it means if this channel
-                    // fails to send a message.
-                };
-                //event_loop.exit();
-            }
-            WindowEvent::RedrawRequested => {
-                let message = AppMessage::PleaseRender;
-                if smol::block_on(self.gui_message_tx.send(message)).is_err() {
-                    error!("[App] Failed to request the client to redraw...");
-                    // TODO: Maybe quit?
-                    // Concurrency is complex so I don't yet know what it means if this channel
-                    // fails to send a message.
                     event_loop.exit();
                 };
             }
+            WindowEvent::RedrawRequested => {
+                let message = AppMessage::PleaseRender;
+                if (self.gui_message_tx.send_blocking(message)).is_err() {
+                    error!("[App] Failed to request the client to redraw...");
+                    event_loop.exit();
+                } else {
+                    //self.is_rendering = false;
+                }
+            }
             event => {
                 let message = AppMessage::WindowEvent(event);
-                if smol::block_on(self.gui_message_tx.send(message)).is_err() {
+                if (self.gui_message_tx.send_blocking(message)).is_err() {
                     error!("[App] Failed to request the client to redraw...");
-                    // TODO: Maybe quit?
-                    // Concurrency is complex so I don't yet know what it means if this channel
-                    // fails to send a message.
                     event_loop.exit();
                 };
             }
@@ -145,7 +140,20 @@ impl ApplicationHandler for Application {
 
     fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
         if let Some(window) = &self.window {
-            window.request_redraw();
+            let target_fps = 60.0;
+            let frame_duration = Duration::from_secs_f64(1.0 / target_fps); // ~16.67ms
+            let elapsed = self.last_frame_moment.elapsed();
+
+            if elapsed >= frame_duration {
+                window.request_redraw();
+                self.last_frame_moment = Instant::now();
+            } else {
+                let time_left = frame_duration - elapsed;
+                _event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
+                    Instant::now() + time_left,
+                ));
+            }
         }
+
     }
 }

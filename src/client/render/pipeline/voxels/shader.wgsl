@@ -38,6 +38,7 @@ struct VertexOutput {
     @location(0) @interpolate(perspective) uv: vec2<f32>,
     @location(1) @interpolate(perspective) normal: vec3<f32>,
     @location(2) block_id: u32,
+    @location(3) world_position: vec3<f32>,
 };
 
 const POSITIONS = array<vec3<f32>, 8>(
@@ -90,7 +91,7 @@ fn vs_main(
 ) -> VertexOutput {
     let raw_block_id = block_group_data[i_idx];
     if raw_block_id == 0u {
-        return VertexOutput(vec4<f32>(0.0), vec2<f32>(0.0), vec3<f32>(0.0), 0);
+        return VertexOutput(vec4<f32>(0.0), vec2<f32>(0.0), vec3<f32>(0.0), 0, vec3<f32>(0.0));
     }
     let block_id = raw_block_id - 1;
 
@@ -113,25 +114,50 @@ fn vs_main(
     out.uv = UV_DATA[uv_idx];
     out.block_id = block_id;
     out.normal = FACE_NORMALS[face_idx];
+    out.world_position = grid_pos;
     return out;
 }
 
+struct FragmentOutput {
+    @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4<f32>,
+};
+
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(in: VertexOutput) -> FragmentOutput {
+    var depth: f32 = in.clip_position.z;
+    var col: vec4<f32>;
+
+    /* Failsafe for if an APPEARANCE doesn't exist in the atlas? */
     let palette_length = arrayLength(&block_appearance_palette);
     if (in.block_id >= palette_length) {
-        let grid = floor(in.uv * vec2(2.0));
-
-        if (i32(grid.x + grid.y) % 2 == 0) {
-            return vec4(0.0, 0.0, 0.0, 1.0);
-        } else {
-            return vec4(1.0, 0.0, 1.0, 1.0);
-        }
+        col = missingTexture(in.uv);
+    } else {
+        let material = block_appearance_palette[in.block_id].material;
+        let atlas_pixel_size = vec2<f32>(textureDimensions(material_atlas));
+        let atlas_uv = mix(material.atlas_position, material.atlas_position + material.atlas_size, in.uv) / atlas_pixel_size;
+        
+        col = textureSample(material_atlas, material_atlas_s, atlas_uv);
     }
 
-    let material = block_appearance_palette[in.block_id].material;
-    let atlas_pixel_size = vec2<f32>(textureDimensions(material_atlas));
-    let atlas_uv = mix(material.atlas_position, material.atlas_position + material.atlas_size, in.uv) / atlas_pixel_size;
-    let col = textureSample(material_atlas, material_atlas_s, atlas_uv);
-    return col;
+    let slice = u32(world_uniforms.global_time * 4.0) % block_group_uniforms.size.x;
+    if (i32(in.world_position.x) == i32(slice)) {
+        
+    } else {
+        // TODO: Pass in clear colour? Or write to stencil buffer?
+        let white = vec4(0.9, 0.9, 0.9, 1.0);
+        depth = 0.999;
+        col = mix(col, white, 0.25);
+    }
+
+    return FragmentOutput(depth, col);
+}
+
+fn missingTexture(uv: vec2<f32>) -> vec4<f32> {
+    let grid = floor(uv * vec2(2.0));
+    if (i32(grid.x + grid.y) % 2 == 0) {
+        return vec4(0.0, 0.0, 0.0, 1.0);
+    } else {
+        return vec4(1.0, 0.0, 1.0, 1.0);
+    }
 }
