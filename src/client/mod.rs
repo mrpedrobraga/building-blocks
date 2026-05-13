@@ -6,7 +6,7 @@ use self::render::gpu::GameRenderer;
 use crate::{
     client::{app::AppMessage, render::GameRenderState, view::GameView},
     server::{
-        messages::ServerMessage, ClientInfo, LocalServerInterface, ServerInterface, UnknownMessage,
+        ClientInfo, LocalServerInterface, ServerInterface, UnknownMessage, messages::ServerMessage,
     },
 };
 use glam::UVec2;
@@ -67,7 +67,7 @@ impl Client {
 
         loop {
             let (Some(server_interface), Some(app_msg_rx)) =
-                (self.server_interface.as_ref(), self.app_msg_rx.as_ref())
+                (self.server_interface.as_ref(), self.app_msg_rx.as_mut())
             else {
                 break;
             };
@@ -82,8 +82,15 @@ impl Client {
             )
             .await;
 
+            let mut should_redraw = false;
+
             match msg {
-                Ok(Message::App(app_message)) => self.handle_app_message(app_message).await,
+                Ok(Message::App(app_message)) => Self::handle_app_message(
+                    &mut self.game_render_state,
+                    &mut self.game_renderer,
+                    app_message,
+                    &mut should_redraw,
+                ),
                 Ok(Message::Server(server_message)) => {
                     self.handle_server_message(server_message).await
                 }
@@ -92,13 +99,43 @@ impl Client {
                     break;
                 }
             };
+
+            /* Eagerly draining all accumulated messages. */
+            if let Some(app_msg_rx) = self.app_msg_rx.as_ref() {
+                while let Ok(extra_app_message) = app_msg_rx.try_recv() {
+                    Self::handle_app_message(
+                        &mut self.game_render_state,
+                        &mut self.game_renderer,
+                        extra_app_message,
+                        &mut should_redraw,
+                    );
+                }
+            }
+
+            /* Only rendering at the very end... in the future, maybe we should render on another thread. */
+            if should_redraw
+                && let Some(game_renderer) = self.game_renderer.as_mut()
+                && let Some(game_render_state) = self.game_render_state.as_mut()
+            {
+                let screen_size = game_renderer.render_target.surface_size;
+                game_render_state.world_state.tick(
+                    &game_renderer.gpu,
+                    UVec2::new(screen_size.width, screen_size.height),
+                );
+                game_renderer.render(game_render_state);
+            }
         }
 
         info!("[Client] Done.");
     }
 
     /// Handles a message send by an [`Application`]...
-    pub async fn handle_app_message(&mut self, app_message: AppMessage) {
+    pub fn handle_app_message(
+        game_render_state: &mut Option<GameRenderState>,
+        game_renderer: &mut Option<GameRenderer>,
+        app_message: AppMessage,
+        should_redraw: &mut bool,
+    ) {
         trace!("[Client] Message sent by the UI: {:?}.", app_message);
 
         match app_message {
@@ -113,21 +150,16 @@ impl Client {
             AppMessage::SetRenderTarget(gpu, window_render_target) => {
                 // TODO: Pass in the current GameView so we start with some data,
                 // then after that we do progressive patching.
-                self.game_render_state = Some(GameRenderState::new(&gpu));
-                self.game_renderer = Some(GameRenderer::new(gpu, window_render_target));
+                *game_render_state = Some(GameRenderState::new(&gpu));
+                *game_renderer = Some(GameRenderer::new(gpu, window_render_target));
             }
             AppMessage::ResizeRenderTarget(new_size) => {
-                if let Some(game_renderer) = self.game_renderer.as_mut() {
+                if let Some(game_renderer) = game_renderer.as_mut() {
                     game_renderer.resize(new_size);
                 }
             }
             AppMessage::PleaseRender => {
-                if let Some(game_renderer) = self.game_renderer.as_mut()
-                    && let Some(game_render_state) = self.game_render_state.as_mut() {
-                        let screen_size = game_renderer.render_target.surface_size;
-                        game_render_state.world_state.tick(&game_renderer.gpu, UVec2::new(screen_size.width, screen_size.height));
-                        game_renderer.render(game_render_state);
-                    }
+                *should_redraw = true;
             }
         }
     }

@@ -10,7 +10,7 @@
 use crate::client::render::{gpu::Gpu, render_target::window::WindowRenderTarget};
 use glam::UVec2;
 use smol::channel::Sender;
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{sync::Arc, time::{Instant}};
 use tracing::{error, info, info_span};
 use winit::{
     application::ApplicationHandler,
@@ -117,15 +117,13 @@ impl ApplicationHandler for Application {
                 if (self.gui_message_tx.send_blocking(message)).is_err() {
                     error!("[App] Failed to request the client to resize...");
                     event_loop.exit();
-                };
+                }
             }
             WindowEvent::RedrawRequested => {
                 let message = AppMessage::PleaseRender;
                 if (self.gui_message_tx.send_blocking(message)).is_err() {
                     error!("[App] Failed to request the client to redraw...");
                     event_loop.exit();
-                } else {
-                    //self.is_rendering = false;
                 }
             }
             event => {
@@ -139,21 +137,8 @@ impl ApplicationHandler for Application {
     }
 
     fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
-        if let Some(window) = &self.window {
-            let target_fps = 60.0;
-            let frame_duration = Duration::from_secs_f64(1.0 / target_fps); // ~16.67ms
-            let elapsed = self.last_frame_moment.elapsed();
-
-            if elapsed >= frame_duration {
-                window.request_redraw();
-                self.last_frame_moment = Instant::now();
-            } else {
-                let time_left = frame_duration - elapsed;
-                _event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
-                    Instant::now() + time_left,
-                ));
-            }
+        if let Some(window) = self.window.as_ref() {
+            window.request_redraw();
         }
-
     }
 }
