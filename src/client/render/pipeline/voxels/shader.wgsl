@@ -140,13 +140,15 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         col = textureSample(material_atlas, material_atlas_s, atlas_uv);
     }
 
+    //col = vec4(col.rgb * hsv2rgb( vec3(in.world_position.x * 0.1, 1.0, 1.0) ), 1.0);
+
     let slice = u32(world_uniforms.global_time * 4.0) % block_group_uniforms.size.x;
     if (i32(in.world_position.x) == i32(slice)) {
-        
+        depth = depth * 0.5;
     } else {
         // TODO: Pass in clear colour? Or write to stencil buffer?
-        let white = vec4(0.9, 0.9, 0.9, 1.0);
-        depth = 0.999;
+        let white = vec4(vec3(0.9), 1.0);
+        depth = 0.5 + depth * 0.5;
         col = mix(col, white, 0.25);
     }
 
@@ -160,4 +162,11 @@ fn missingTexture(uv: vec2<f32>) -> vec4<f32> {
     } else {
         return vec4(1.0, 0.0, 1.0, 1.0);
     }
+}
+
+fn hsv2rgb(c: vec3<f32>) -> vec3<f32>
+{
+    let K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    let p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, saturate(p - K.xxx), c.y);
 }

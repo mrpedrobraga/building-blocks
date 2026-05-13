@@ -17,7 +17,7 @@ use winit::{
     dpi::LogicalSize,
     event::WindowEvent,
     event_loop::EventLoop,
-    window::{Window, WindowAttributes},
+    window::{CustomCursor, Window, WindowAttributes},
 };
 
 pub struct Application {
@@ -68,6 +68,12 @@ impl ApplicationHandler for Application {
                 )
                 .expect("Failed to create application window!");
             let window = Arc::new(window);
+
+            let cursor_img = image::open("src/client/render/pipeline/pixels/debug_cursor.png").unwrap();
+            let cursor = CustomCursor::from_rgba(cursor_img.resize(48, 48, image::imageops::FilterType::Nearest).to_rgba8().to_vec(), 48, 48, 0, 0).expect("Cursor sucked!");
+            let cursor = event_loop.create_custom_cursor(cursor);
+            window.set_cursor(cursor);
+
             self.window = Some(window.clone());
 
             /* From the window, create a render target that the client can reder to with the GPU. */
