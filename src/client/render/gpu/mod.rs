@@ -104,7 +104,7 @@ impl GameRenderer {
         {
             trace!("[Render] Rendering bind group...");
             pass.set_bind_group(2, &block_group.bind_group, &[]);
-            pass.draw(0..36, 0..block_group.block_appearance_data.len() as u32);
+            pass.draw(0..36, 0..1);
         }
     }
 

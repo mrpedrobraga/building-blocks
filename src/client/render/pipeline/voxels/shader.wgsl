@@ -36,10 +36,9 @@ struct BlockClusterUniforms {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) @interpolate(perspective) uv: vec2<f32>,
-    @location(1) @interpolate(perspective) normal: vec3<f32>,
-    @location(2) block_id: u32,
-    @location(3) block_position: vec3<f32>,
-    @location(4) triangle_idx: u32,
+    @location(1) triangle_idx: u32,
+    @location(2) @interpolate(perspective) local_position: vec4<f32>,
+    @location(3) @interpolate(perspective) world_position: vec4<f32>
 };
 
 const POSITIONS = array<vec3<f32>, 8>(
@@ -109,33 +108,20 @@ fn vs_main(
     @builtin(vertex_index) v_idx: u32,
     @builtin(instance_index) i_idx: u32
 ) -> VertexOutput {
-    let raw_block_id = block_group_data[i_idx];
-    if raw_block_id == 0u {
-        return VertexOutput(vec4<f32>(0.0), vec2<f32>(0.0), vec3<f32>(0.0), 0, vec3<f32>(0.0), 0);
-    }
-    let block_id = raw_block_id - 1;
-
-    let size = block_group_uniforms.size.xyz;
-    let x = i_idx % size.x;
-    let y = (i_idx / size.x) % size.y;
-    let z = i_idx / (size.x * size.y);
-    let grid_pos = vec3<f32>(f32(x), f32(y), f32(z));
-
-    let corner_idx = INDICES[v_idx];
-    var local_pos = POSITIONS[corner_idx];
-
     let face_idx = v_idx / 6u;
     let uv_idx = v_idx % 6u; // Which vertex of the face are we on?
-
-    var world_pos = block_group_uniforms.transform * vec4<f32>(grid_pos + local_pos, 1.0);
+    
+    let corner_idx = INDICES[v_idx];
+    let vertex_pos = POSITIONS[corner_idx];
+    let local_position = vec4(vertex_pos * vec3<f32>(block_group_uniforms.size.xyz), 1.0);
+    let world_position = block_group_uniforms.transform * local_position;
 
     var out: VertexOutput;
-    out.clip_position = world_uniforms.view_matrix * world_pos;
-    out.uv = UV_DATA[uv_idx];
-    out.block_id = block_id;
-    out.normal = FACE_NORMALS[face_idx];
-    out.block_position = grid_pos;
+    out.clip_position = world_uniforms.view_matrix * world_position;
     out.triangle_idx = v_idx + i_idx;
+    out.uv = UV_DATA[v_idx % 6];
+    out.local_position = local_position;
+    out.world_position = local_position;
     return out;
 }
 
@@ -149,7 +135,10 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var depth: f32 = in.clip_position.z;
     var col: vec4<f32>;
 
-    col = vec4(test_colors[in.triangle_idx % 16], 1.0);
+    //col = vec4(test_colors[in.triangle_idx % 16], 1.0);
+    col = vec4(in.uv, 0.0, 1.0);
+    //col = vec4(in.local_position.xyz / vec3<f32>(block_group_uniforms.size), 1.0);
+    col = vec4(srgbToLinear(col.rgb), col.a);
 
     return FragmentOutput(depth, col);
 }
@@ -172,4 +161,13 @@ fn hsv2rgb(c: vec3<f32>) -> vec3<f32>
     let K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
     let p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
     return c.z * mix(K.xxx, saturate(p - K.xxx), c.y);
+}
+
+fn srgbToLinear(srgb: vec3<f32>) -> vec3<f32> {
+    let cutoff = 0.04045;
+    let higher = pow((srgb + vec3<f32>(0.055)) / vec3<f32>(1.055), vec3<f32>(2.4));
+    let lower = srgb / vec3<f32>(12.92);
+    
+    // Select higher or lower based on component-wise comparison
+    return select(lower, higher, srgb > vec3<f32>(cutoff));
 }
