@@ -38,7 +38,7 @@ struct VertexOutput {
     @location(0) @interpolate(perspective) uv: vec2<f32>,
     @location(1) @interpolate(perspective) normal: vec3<f32>,
     @location(2) block_id: u32,
-    @location(3) world_position: vec3<f32>,
+    @location(3) block_position: vec3<f32>,
 };
 
 const POSITIONS = array<vec3<f32>, 8>(
@@ -102,7 +102,7 @@ fn vs_main(
     let grid_pos = vec3<f32>(f32(x), f32(y), f32(z));
 
     let corner_idx = INDICES[v_idx];
-    let local_pos = POSITIONS[corner_idx];
+    var local_pos = POSITIONS[corner_idx];
 
     let face_idx = v_idx / 6u;
     let uv_idx = v_idx % 6u; // Which vertex of the face are we on?
@@ -114,7 +114,7 @@ fn vs_main(
     out.uv = UV_DATA[uv_idx];
     out.block_id = block_id;
     out.normal = FACE_NORMALS[face_idx];
-    out.world_position = grid_pos;
+    out.block_position = grid_pos;
     return out;
 }
 
@@ -140,17 +140,19 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         col = textureSample(material_atlas, material_atlas_s, atlas_uv);
     }
 
-    //col = vec4(col.rgb * hsv2rgb( vec3(in.world_position.x * 0.1, 1.0, 1.0) ), 1.0);
+    //col = vec4(col.rgb * hsv2rgb( vec3(in.block_position.x * 0.1, 1.0, 1.0) ), 1.0);
 
-    let slice = u32(world_uniforms.global_time * 4.0) % block_group_uniforms.size.x;
-    if (i32(in.world_position.x) == i32(slice)) {
-        depth = depth * 0.5;
-    } else {
-        // TODO: Pass in clear colour? Or write to stencil buffer?
-        let white = vec4(vec3(0.9), 1.0);
-        depth = 0.5 + depth * 0.5;
-        col = mix(col, white, 0.25);
-    }
+    col *= 0.5 + 0.5 * saturate(dot(in.normal, normalize(vec3(0.5, 0.0, 1.0))));
+    col *= 0.5 + 0.4 * checkerboard(in.block_position);
+
+    // let slice = u32(world_uniforms.global_time * 4.0) % block_group_uniforms.size.x;
+    // if (i32(in.block_position.x) == i32(slice)) {
+    //     depth = depth * 0.5;
+    // } else {
+    //     let white = vec4(vec3(0.9), 1.0);
+    //     depth = 0.5 + depth * 0.5;
+    //     col = mix(col, white, 0.25);
+    // }
 
     return FragmentOutput(depth, col);
 }
@@ -162,6 +164,10 @@ fn missingTexture(uv: vec2<f32>) -> vec4<f32> {
     } else {
         return vec4(1.0, 0.0, 1.0, 1.0);
     }
+}
+
+fn checkerboard(position: vec3<f32>) -> f32 {
+    return f32(i32(position.x + position.y + position.z) % 2);
 }
 
 fn hsv2rgb(c: vec3<f32>) -> vec3<f32>
