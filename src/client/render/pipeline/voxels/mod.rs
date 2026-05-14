@@ -16,6 +16,7 @@
 //!
 //!
 
+use glam::Vec4;
 use wgpu::{
     include_wgsl, BindGroupLayout, Device, PipelineLayoutDescriptor, PrimitiveState,
     RenderPipeline, RenderPipelineDescriptor, TextureFormat,
@@ -31,6 +32,7 @@ pub struct VoxelPipeline {
 #[derive(Default, Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct WorldUniforms {
     pub view_matrix: [f32; 16],
+    pub camera_world_position: Vec4,
     pub global_time: f32,
     pub _padding: [f32; 3],
 }

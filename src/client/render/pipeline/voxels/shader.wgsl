@@ -9,6 +9,7 @@ struct RenderMaterial {
 
 struct WorldUniforms {
     view_matrix: mat4x4<f32>,
+    camera_world_position: vec4<f32>,
     global_time: f32,
     _padding_0: f32,
     _padding_1: f32,
@@ -17,6 +18,7 @@ struct WorldUniforms {
 
 struct BlockClusterUniforms {
     transform: mat4x4<f32>,
+    inv_transform: mat4x4<f32>,
     size: vec3<u32>,
     _padding: u32
 }
@@ -121,7 +123,7 @@ fn vs_main(
     out.triangle_idx = v_idx + i_idx;
     out.uv = UV_DATA[v_idx % 6];
     out.local_position = local_position;
-    out.world_position = local_position;
+    out.world_position = world_position;
     return out;
 }
 
@@ -130,18 +132,63 @@ struct FragmentOutput {
     @location(0) color: vec4<f32>,
 };
 
+struct Ray {
+    origin: vec3<f32>,
+    direction: vec3<f32>,
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var depth: f32 = in.clip_position.z;
     var col: vec4<f32>;
 
-    //col = vec4(test_colors[in.triangle_idx % 16], 1.0);
-    col = vec4(in.uv, 0.0, 1.0);
-    //col = vec4(in.local_position.xyz / vec3<f32>(block_group_uniforms.size), 1.0);
+    let world_ray_dir = (in.world_position.xyz - world_uniforms.camera_world_position.xyz);
+    let local_ray_dir = normalize((block_group_uniforms.inv_transform * vec4<f32>(world_ray_dir, 0.0)).xyz);
+    var ray_local: Ray;
+    ray_local.origin = in.local_position.xyz;
+    ray_local.direction = local_ray_dir;
+
+    col = vec4(ray_local.direction * 0.5 + 0.5, 1.0);
+
+    var photon_position = ray_local.origin;
+
+    for (var i = 0; i < 100; i++) {
+        if (!is_inside_box(photon_position, vec3(0.0, 0.0, 0.0), vec3<f32>(block_group_uniforms.size))) {
+            discard;
+        }
+        
+        let block_idx = block_index_for_position(vec3<u32>(photon_position));
+        let block_type = block_group_data[block_idx];
+
+        if (block_type == 0) {
+            photon_position += ray_local.direction * 0.5;
+            continue;
+        }
+
+        col = vec4(test_colors[block_idx % 13], 1.0);
+        break;
+    }
+
+    /* Undoes LINEAR to SRGB conversion, useful for visualizing mathematical data. */
     col = vec4(srgbToLinear(col.rgb), col.a);
 
     return FragmentOutput(depth, col);
 }
+
+fn block_index_for_position(local_position_i: vec3<u32>) -> u32 {
+    return local_position_i.x +
+        local_position_i.y * block_group_uniforms.size.x +
+        local_position_i.z * block_group_uniforms.size.x * block_group_uniforms.size.y;
+}
+
+fn is_inside_box(
+    point: vec3<f32>,
+    box_min: vec3<f32>,
+    box_max: vec3<f32>
+) -> bool {
+    return all(point >= box_min) && all(point <= box_max);
+}
+
 
 fn missingTexture(uv: vec2<f32>) -> vec4<f32> {
     let grid = floor(uv * vec2(2.0));

@@ -1,7 +1,7 @@
 use core::f32;
 use std::ops::{Mul};
 
-use glam::{Mat4, Quat, UVec2, Vec3, vec3};
+use glam::{Mat4, Quat, UVec2, Vec3, Vec4, vec3};
 use wgpu::util::DeviceExt;
 
 use super::{gpu::Gpu, pipeline::voxels::WorldUniforms, *};
@@ -128,10 +128,12 @@ impl WorldRenderState {
         let block_group = &current_scene.root_layout.block_groups[0];
         let block_group_size = block_group.uniforms.size.as_vec3();
 
-        let view_matrix = camera_orbit(block_group_size, 0.0, UVec2::new(640, 640));
+        let cam = camera_orbit(block_group_size, 0.0);
+        let view_matrix = cam.view_matrix(UVec2::new(640, 640)).to_cols_array();
 
         let uniforms = WorldUniforms {
             view_matrix,
+            camera_world_position: Vec4::new(0.0, 0.0, 0.0, 1.0),
             global_time: 0.0,
             _padding: [0.0, 0.0, 0.0],
         };
@@ -169,13 +171,14 @@ impl WorldRenderState {
             .size
             .as_vec3();
 
-        let view_matrix = camera_orbit(
+        let cam = camera_orbit(
             block_group_size,
             self.beggining.elapsed().as_secs_f32(),
-            screen_size,
         );
+        let view_matrix = cam.view_matrix(screen_size).to_cols_array();
 
         let uniforms = WorldUniforms {
+            camera_world_position: Vec4::new(cam.position.x, cam.position.y, cam.position.z, 1.0),
             view_matrix,
             global_time: self.beggining.elapsed().as_secs_f32(),
             _padding: [0.0, 0.0, 0.0],
@@ -198,8 +201,8 @@ impl WorldRenderState {
     }
 }
 
-fn camera_orbit(_block_group_size: Vec3, _time: f32, screen_size: UVec2) -> [f32; 16] {
-    let distance = 60.0;
+fn camera_orbit(_block_group_size: Vec3, _time: f32) -> Camera {
+    let distance = 50.0;
     let mut cam = Camera::new(
         vec3(distance, distance, distance).rotate_z(_time * 0.125 * f32::consts::TAU).mul(1.0),
         Quat::default(),
@@ -210,7 +213,7 @@ fn camera_orbit(_block_group_size: Vec3, _time: f32, screen_size: UVec2) -> [f32
         },
     );
     cam.look_at(Vec3::ZERO, Vec3::Z);
-    cam.view_matrix(screen_size).to_cols_array()
+    cam
 }
 
 impl CurrentSceneRenderState {
@@ -269,6 +272,7 @@ impl BlockGroupRenderState {
     pub fn new(gpu: &Gpu) -> Self {
         let uniforms = BlockGroupUniforms {
             transform: Mat4::IDENTITY.to_cols_array(),
+            inv_transform: Mat4::IDENTITY.to_cols_array(),
             size: UVec3::new(0, 0, 0),
             _padding: 0,
         };
@@ -316,11 +320,13 @@ impl BlockGroupRenderState {
     }
 
     pub fn example(gpu: &Gpu) -> Self {
-        let block_group_size = UVec3::new(100, 100, 20);
+        let block_group_size = UVec3::new(100, 100, 21);
         //let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
+        let transform = Mat4::from_translation(block_group_size.as_vec3().mul(-0.5));
 
         let uniforms = BlockGroupUniforms {
-            transform: Mat4::from_translation(block_group_size.as_vec3().mul(-0.5)).to_cols_array(),
+            transform: transform.to_cols_array(),
+            inv_transform: transform.inverse().to_cols_array(),
             size: block_group_size,
             _padding: 0,
         };
