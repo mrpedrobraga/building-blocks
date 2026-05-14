@@ -41,6 +41,10 @@ impl UniverseRenderState {
                             atlas_position: Vec2::new(0.0, 0.0),
                             atlas_size: Vec2::new(8.0, 8.0),
                         },
+                        RenderMaterial {
+                            atlas_position: Vec2::new(8.0, 0.0),
+                            atlas_size: Vec2::new(8.0, 8.0),
+                        }
                     ]),
                     usage: wgpu::BufferUsages::STORAGE,
                 });
@@ -202,7 +206,7 @@ impl WorldRenderState {
 }
 
 fn camera_orbit(_block_group_size: Vec3, _time: f32) -> Camera {
-    let distance = 200.0;
+    let distance = 50.0;
     let mut cam = Camera::new(
         vec3(distance, distance, distance).rotate_z(_time * 0.125 * f32::consts::TAU).mul(1.0),
         Quat::default(),
@@ -251,9 +255,10 @@ impl LayoutRenderState {
     pub fn example(gpu: &Gpu) -> Self {
         let sub_layouts = Vec::new();
 
-        let mut block_groups = Vec::new();
-        let block_group_0 = BlockGroupRenderState::example(gpu);
-        block_groups.push(block_group_0);
+        let block_groups = vec![
+            BlockGroupRenderState::example(gpu, 1),
+            BlockGroupRenderState::example(gpu, 2),
+        ];
 
         Self {
             block_groups,
@@ -319,11 +324,15 @@ impl BlockGroupRenderState {
         }
     }
 
-    pub fn example(gpu: &Gpu) -> Self {
+    pub fn example(gpu: &Gpu, material: u32) -> Self {
         
-        let block_group_size = UVec3::new(400, 400, 21);
+        let block_group_size = UVec3::new(100, 100, 21);
         //let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
-        let transform = Mat4::from_translation(block_group_size.as_vec3().mul(-0.5));
+        let mut transform = Mat4::from_translation(block_group_size.as_vec3() * vec3(-0.5, -0.5, 0.0));
+
+        if material == 2 {
+            transform = Mat4::from_translation(block_group_size.as_vec3() * vec3(-1.0, -1.0, 0.2));
+        }
 
         let uniforms = BlockGroupUniforms {
             transform: transform.to_cols_array(),
@@ -350,7 +359,7 @@ impl BlockGroupRenderState {
 
                 if put_block
                 {
-                    BlockAppearanceEntry { idx_in_palette: 1 }
+                    BlockAppearanceEntry { idx_in_palette: material }
                 } else {
                     BlockAppearanceEntry { idx_in_palette: 0 }
                 }
