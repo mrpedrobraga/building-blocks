@@ -39,7 +39,6 @@ struct VertexOutput {
     @location(1) @interpolate(perspective) normal: vec3<f32>,
     @location(2) block_id: u32,
     @location(3) block_position: vec3<f32>,
-    @location(4) triangle_idx: u32,
 };
 
 const POSITIONS = array<vec3<f32>, 8>(
@@ -85,25 +84,6 @@ const FACE_NORMALS = array<vec3<f32>, 6>(
     vec3<f32>(0.0, 1.0, 0.0)
 );
 
-const test_colors: array<vec3<f32>, 16> = array<vec3<f32>, 16>(
-    vec3<f32>(1.0, 0.0, 0.0),    // 01: Pure Red
-    vec3<f32>(0.0, 1.0, 0.0),    // 02: Pure Green
-    vec3<f32>(0.0, 0.0, 1.0),    // 03: Pure Blue
-    vec3<f32>(1.0, 1.0, 0.0),    // 04: Bright Yellow
-    vec3<f32>(0.0, 1.0, 1.0),    // 05: Electric Cyan
-    vec3<f32>(1.0, 0.0, 1.0),    // 06: Vivid Magenta
-    vec3<f32>(1.0, 0.5, 0.0),    // 07: Bright Orange
-    vec3<f32>(0.5, 0.0, 1.0),    // 08: Deep Purple
-    vec3<f32>(0.0, 1.0, 0.5),    // 09: Mint Green
-    vec3<f32>(1.0, 0.0, 0.5),    // 10: Hot Pink
-    vec3<f32>(0.0, 0.5, 1.0),    // 11: Sky Blue
-    vec3<f32>(0.5, 1.0, 0.0),    // 12: Lime Green
-    vec3<f32>(0.2, 0.2, 0.2),    // 13: Dark Charcoal
-    vec3<f32>(0.8, 0.8, 0.8),    // 14: Light Grey
-    vec3<f32>(0.6, 0.4, 0.2),    // 15: Earth Brown
-    vec3<f32>(1.0, 1.0, 1.0)     // 16: Pure White
-);
-
 @vertex
 fn vs_main(
     @builtin(vertex_index) v_idx: u32,
@@ -111,7 +91,7 @@ fn vs_main(
 ) -> VertexOutput {
     let raw_block_id = block_group_data[i_idx];
     if raw_block_id == 0u {
-        return VertexOutput(vec4<f32>(0.0), vec2<f32>(0.0), vec3<f32>(0.0), 0, vec3<f32>(0.0), 0);
+        return VertexOutput(vec4<f32>(0.0), vec2<f32>(0.0), vec3<f32>(0.0), 0, vec3<f32>(0.0));
     }
     let block_id = raw_block_id - 1;
 
@@ -135,7 +115,6 @@ fn vs_main(
     out.block_id = block_id;
     out.normal = FACE_NORMALS[face_idx];
     out.block_position = grid_pos;
-    out.triangle_idx = v_idx + i_idx;
     return out;
 }
 
@@ -149,7 +128,31 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var depth: f32 = in.clip_position.z;
     var col: vec4<f32>;
 
-    col = vec4(test_colors[in.triangle_idx % 16], 1.0);
+    /* Failsafe for if an APPEARANCE doesn't exist in the atlas? */
+    let palette_length = arrayLength(&block_appearance_palette);
+    if (in.block_id >= palette_length) {
+        col = missingTexture(in.uv);
+    } else {
+        let material = block_appearance_palette[in.block_id].material;
+        let atlas_pixel_size = vec2<f32>(textureDimensions(material_atlas));
+        let atlas_uv = mix(material.atlas_position, material.atlas_position + material.atlas_size, in.uv) / atlas_pixel_size;
+        
+        col = textureSample(material_atlas, material_atlas_s, atlas_uv);
+    }
+
+    //col = vec4(col.rgb * hsv2rgb( vec3(in.block_position.x * 0.1, 1.0, 1.0) ), 1.0);
+
+    col *= 0.5 + 0.5 * saturate(dot(in.normal, normalize(vec3(0.5, 0.0, 1.0))));
+    //col *= 0.5 + 0.4 * checkerboard(in.block_position);
+
+    // let slice = u32(world_uniforms.global_time * 4.0) % block_group_uniforms.size.x;
+    // if (i32(in.block_position.x) == i32(slice)) {
+    //     depth = depth * 0.5;
+    // } else {
+    //     let white = vec4(vec3(0.9), 1.0);
+    //     depth = 0.5 + depth * 0.5;
+    //     col = mix(col, white, 0.25);
+    // }
 
     return FragmentOutput(depth, col);
 }
