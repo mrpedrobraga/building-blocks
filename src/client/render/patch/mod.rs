@@ -320,7 +320,8 @@ impl BlockGroupRenderState {
     }
 
     pub fn example(gpu: &Gpu) -> Self {
-        let block_group_size = UVec3::new(400, 400, 40);
+        
+        let block_group_size = UVec3::new(400, 400, 21);
         //let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
         let transform = Mat4::from_translation(block_group_size.as_vec3().mul(-0.5));
 

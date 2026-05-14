@@ -169,8 +169,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     var ray_hit_face = 0; // 0 = YZ; 1 = XZ; 2 = XY;
     var current_voxel_block_type: u32;
+    var i = 0;
 
-    for (var i = 0; i < 200; i++) {
+    for (; i < 200; i++) {
         if (!is_inside_box(photon_voxel_position, vec3(0, 0, 0), vec3<i32>(block_group_uniforms.size))) {
             discard;
         }
@@ -246,15 +247,17 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     /* Simple Lighting */
     let light = normalize(vec3(0.5, 0.0, 1.0));
     col *= 0.5 + 0.5 * saturate( dot(normal, light) );
-
     
     let ray_hit_world_pos = block_group_uniforms.inv_transform * vec4(ray_hit_pos, 1.0);
     let ray_hit_clip_pos = world_uniforms.view_matrix * ray_hit_world_pos;
     //depth = ray_hit_clip_pos.z / ray_hit_clip_pos.w;
     
     //col = vec4(vec3(1.0) - vec3(ray_hit_world_pos.z / 20.0), col.a);
-    /* Undoes LINEAR to SRGB conversion, useful for visualizing mathematical data. */
-    //col = vec4(srgbToLinear(col.rgb), col.a);
+    
+    // /* HEATMAP */
+    // col = vec4(vec3( f32(i) / 200.0 ), 1.0);
+    // /* Undoes LINEAR to SRGB conversion, useful for visualizing mathematical data. */
+    // col = vec4(srgbToLinear(col.rgb), col.a);
 
     return FragmentOutput(depth, col);
 }
