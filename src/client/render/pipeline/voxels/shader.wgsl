@@ -132,45 +132,123 @@ struct FragmentOutput {
     @location(0) color: vec4<f32>,
 };
 
-struct Ray {
-    origin: vec3<f32>,
-    direction: vec3<f32>,
-}
-
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var depth: f32 = in.clip_position.z;
     var col: vec4<f32>;
 
     let world_ray_dir = (in.world_position.xyz - world_uniforms.camera_world_position.xyz);
-    let local_ray_dir = normalize((block_group_uniforms.inv_transform * vec4<f32>(world_ray_dir, 0.0)).xyz);
-    var ray_local: Ray;
-    ray_local.origin = in.local_position.xyz;
-    ray_local.direction = local_ray_dir;
+    let ray_direction = normalize((block_group_uniforms.inv_transform * vec4<f32>(world_ray_dir, 0.0)).xyz);
+    let ray_origin = in.local_position.xyz;
 
-    col = vec4(ray_local.direction * 0.5 + 0.5, 1.0);
+    var photon_voxel_position: vec3<i32> = vec3<i32>(ray_origin + 0.001 * ray_direction);
+    
+    let inv_dir = abs(1.0 / ray_direction);
+    var dda_ray_step = vec3<i32>(sign(ray_direction));
+    var dda_sides_dist: vec3<f32> = inv_dir * select(
+        ray_origin - floor(ray_origin), 
+        floor(ray_origin) + 1.0 - ray_origin, 
+        ray_direction > vec3(0.0)
+    );
 
-    var photon_position = ray_local.origin;
+    // if (ray_direction.x < 0.0) {
+    //     dda_sides_dist.x = (ray_origin.x - f32(photon_voxel_position.x)) * inv_dir.x;
+    // } else {
+    //     dda_sides_dist.x = (1.0 - ray_origin.x + f32(photon_voxel_position.x)) * inv_dir.x;
+    // }
+    // if (ray_direction.y < 0.0) {
+    //     dda_sides_dist.y = (ray_origin.y - f32(photon_voxel_position.y)) * inv_dir.y;
+    // } else {
+    //     dda_sides_dist.y = (1.0 - ray_origin.y + f32(photon_voxel_position.y)) * inv_dir.y;
+    // }
+    // if (ray_direction.z < 0.0) {
+    //     dda_sides_dist.z = (ray_origin.z - f32(photon_voxel_position.z)) * inv_dir.z;
+    // } else {
+    //     dda_sides_dist.z = (1.0 - ray_origin.z + f32(photon_voxel_position.z)) * inv_dir.z;
+    // }
 
-    for (var i = 0; i < 100; i++) {
-        if (!is_inside_box(photon_position, vec3(0.0, 0.0, 0.0), vec3<f32>(block_group_uniforms.size))) {
+    var ray_hit_face = 0; // 0 = YZ; 1 = XZ; 2 = XY;
+    var current_voxel_block_type: u32;
+
+    for (var i = 0; i < 200; i++) {
+        if (!is_inside_box(photon_voxel_position, vec3(0, 0, 0), vec3<i32>(block_group_uniforms.size))) {
             discard;
         }
         
-        let block_idx = block_index_for_position(vec3<u32>(photon_position));
-        let block_type = block_group_data[block_idx];
+        let block_idx = block_index_for_position(vec3<u32>(photon_voxel_position));
+        current_voxel_block_type = block_group_data[block_idx];
 
-        if (block_type == 0) {
-            photon_position += ray_local.direction * 0.5;
-            continue;
+        /* If the block isn't air... */
+        if (current_voxel_block_type != 0) {
+            col = vec4(0.0, 0.0, 0.0, 1.0);
+            break;
         }
 
-        col = vec4(test_colors[block_idx % 13], 1.0);
-        break;
+        if (dda_sides_dist.x < dda_sides_dist.y) {
+            if (dda_sides_dist.x < dda_sides_dist.z) {
+                dda_sides_dist.x += inv_dir.x;
+                photon_voxel_position.x += dda_ray_step.x;
+                ray_hit_face = 0;
+            } else {
+                dda_sides_dist.z += inv_dir.z;
+                photon_voxel_position.z += dda_ray_step.z;
+                ray_hit_face = 2;
+            }
+        } else {
+            if (dda_sides_dist.y < dda_sides_dist.z) {
+                dda_sides_dist.y += inv_dir.y;
+                photon_voxel_position.y += dda_ray_step.y;
+                ray_hit_face = 1;
+            } else {
+                dda_sides_dist.z += inv_dir.z;
+                photon_voxel_position.z += dda_ray_step.z;
+                ray_hit_face = 2;
+            }
+        }
     }
 
+    var t: f32;
+    if (ray_hit_face == 0) {
+        t = dda_sides_dist.x - inv_dir.x;
+    }
+    else if (ray_hit_face == 1) {
+        t = dda_sides_dist.y - inv_dir.y;
+    }
+    else {t = dda_sides_dist.z - inv_dir.z;
+    }
+
+    let ray_hit_pos = ray_origin + ray_direction * t;
+    let ray_hit_pos_within_block = ray_hit_pos - floor(ray_hit_pos);
+
+    var uv: vec2<f32>;
+    var normal: vec3<f32>;
+
+    if (ray_hit_face == 0) {
+        uv = ray_hit_pos_within_block.zy;
+        normal.x = -f32(dda_ray_step.x);
+    }
+    else if (ray_hit_face == 1) {
+        uv = ray_hit_pos_within_block.xz;
+        normal.y = -f32(dda_ray_step.y);
+    }
+    else {
+        uv = ray_hit_pos_within_block.xy;
+        normal.z = -f32(dda_ray_step.z);
+    }
+
+    let appearance = block_appearance_palette[current_voxel_block_type - 1];
+    let material = appearance.material;
+    let atlas_size = vec2<f32>(textureDimensions(material_atlas));
+    let atlas_uv = (material.atlas_position + uv * material.atlas_size) / atlas_size;
+
+    col = textureSample(material_atlas, material_atlas_s, atlas_uv);
+
+    /* Simple Lighting */
+    let light = normalize(vec3(0.5, 0.0, 1.0));
+    col *= 0.5 + 0.5 * saturate( dot(normal, light) );
+
     /* Undoes LINEAR to SRGB conversion, useful for visualizing mathematical data. */
-    col = vec4(srgbToLinear(col.rgb), col.a);
+    // col = vec4(srgbToLinear(col.rgb), col.a);
 
     return FragmentOutput(depth, col);
 }
@@ -182,11 +260,11 @@ fn block_index_for_position(local_position_i: vec3<u32>) -> u32 {
 }
 
 fn is_inside_box(
-    point: vec3<f32>,
-    box_min: vec3<f32>,
-    box_max: vec3<f32>
+    point: vec3<i32>,
+    box_min: vec3<i32>,
+    box_max: vec3<i32>
 ) -> bool {
-    return all(point >= box_min) && all(point <= box_max);
+    return all(point >= box_min) && all(point < box_max);
 }
 
 
