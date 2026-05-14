@@ -1,5 +1,5 @@
 use core::f32;
-use std::ops::{Div, Mul};
+use std::ops::{Mul};
 
 use glam::{Mat4, Quat, UVec2, Vec3, vec3};
 use wgpu::util::DeviceExt;
@@ -198,9 +198,10 @@ impl WorldRenderState {
     }
 }
 
-fn camera_orbit(block_group_size: Vec3, _time: f32, screen_size: UVec2) -> [f32; 16] {
+fn camera_orbit(_block_group_size: Vec3, _time: f32, screen_size: UVec2) -> [f32; 16] {
+    let distance = 60.0;
     let mut cam = Camera::new(
-        vec3(block_group_size.x, block_group_size.x, block_group_size.x).rotate_z(_time * 0.125 * f32::consts::TAU).mul(1.0),
+        vec3(distance, distance, distance).rotate_z(_time * 0.0 * f32::consts::TAU).mul(1.0),
         Quat::default(),
         CameraProjection::Perspective {
             vertical_fov_radians: 60.0_f32.to_radians(),
@@ -315,8 +316,8 @@ impl BlockGroupRenderState {
     }
 
     pub fn example(gpu: &Gpu) -> Self {
-        let block_group_size = UVec3::new(100, 100, 100);
-        let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
+        let block_group_size = UVec3::new(100, 100, 20);
+        //let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
 
         let uniforms = BlockGroupUniforms {
             transform: Mat4::from_translation(block_group_size.as_vec3().mul(-0.5)).to_cols_array(),
@@ -337,11 +338,14 @@ impl BlockGroupRenderState {
         let block_appearance_data = blocks_iter
             .map(|(z, y, x)| {
                 let point = Vec3::new(x as f32, y as f32, z as f32);
-                if point.distance_squared(block_group_half_size) > block_group_half_size.x.powf(2.0)
+                //let put_block = point.distance_squared(block_group_half_size) < block_group_half_size.x.powf(2.0);
+                let put_block = point.z < 10.0 + 5.0 * point.x.mul(0.1).sin() + 5.0 * point.y.mul(0.1).cos();
+
+                if put_block
                 {
                     BlockAppearanceEntry { idx_in_palette: 1 }
                 } else {
-                    BlockAppearanceEntry { idx_in_palette: 1 }
+                    BlockAppearanceEntry { idx_in_palette: 0 }
                 }
             })
             .collect::<Vec<_>>();
