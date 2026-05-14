@@ -247,8 +247,14 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let light = normalize(vec3(0.5, 0.0, 1.0));
     col *= 0.5 + 0.5 * saturate( dot(normal, light) );
 
+    
+    let ray_hit_world_pos = block_group_uniforms.inv_transform * vec4(ray_hit_pos, 1.0);
+    let ray_hit_clip_pos = world_uniforms.view_matrix * ray_hit_world_pos;
+    //depth = ray_hit_clip_pos.z / ray_hit_clip_pos.w;
+    
+    //col = vec4(vec3(1.0) - vec3(ray_hit_world_pos.z / 20.0), col.a);
     /* Undoes LINEAR to SRGB conversion, useful for visualizing mathematical data. */
-    // col = vec4(srgbToLinear(col.rgb), col.a);
+    //col = vec4(srgbToLinear(col.rgb), col.a);
 
     return FragmentOutput(depth, col);
 }
