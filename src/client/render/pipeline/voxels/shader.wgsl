@@ -37,10 +37,9 @@ struct BlockClusterUniforms {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) @interpolate(perspective) uv: vec2<f32>,
-    @location(1) triangle_idx: u32,
-    @location(2) @interpolate(perspective) local_position: vec4<f32>,
-    @location(3) @interpolate(perspective) world_position: vec4<f32>
+    @location(0) triangle_idx: u32,
+    @location(1) @interpolate(perspective) local_position: vec4<f32>,
+    @location(2) @interpolate(perspective) world_position: vec4<f32>
 };
 
 const POSITIONS = array<vec3<f32>, 8>(
@@ -66,24 +65,6 @@ const INDICES = array<u32, 36>(
     
     // Top Face (+Y): Outward normal is +Y
     3u, 2u, 6u, 3u, 6u, 7u
-);
-
-const UV_DATA = array<vec2<f32>, 6>(
-    vec2<f32>(0.0, 1.0), // 0: Bottom-Left
-    vec2<f32>(1.0, 1.0), // 1: Bottom-Right
-    vec2<f32>(1.0, 0.0), // 2: Top-Right
-    vec2<f32>(0.0, 1.0), // 0: Bottom-Left
-    vec2<f32>(1.0, 0.0), // 2: Top-Right
-    vec2<f32>(0.0, 0.0)// 3: Top-Left
-);
-
-const FACE_NORMALS = array<vec3<f32>, 6>(
-    vec3<f32>(0.0, 0.0, -1.0),
-    vec3<f32>(0.0, 0.0, 1.0),
-    vec3<f32>(-1.0, 0.0, 0.0),
-    vec3<f32>(1.0, 0.0, 0.0),
-    vec3<f32>(0.0, -1.0, 0.0),
-    vec3<f32>(0.0, 1.0, 0.0)
 );
 
 const test_colors: array<vec3<f32>, 16> = array<vec3<f32>, 16>(
@@ -121,7 +102,6 @@ fn vs_main(
     var out: VertexOutput;
     out.clip_position = world_uniforms.view_matrix * world_position;
     out.triangle_idx = v_idx + i_idx;
-    out.uv = UV_DATA[v_idx % 6];
     out.local_position = local_position;
     out.world_position = world_position;
     return out;
@@ -144,8 +124,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     let world_ray_dir = (in.world_position.xyz - world_uniforms.camera_world_position.xyz);
     let ray_direction = normalize((block_group_uniforms.inv_transform * vec4<f32>(world_ray_dir, 0.0)).xyz); // This is `rd`
-    let ray_origin = in.local_position.xyz; // This is `ro`
-    let uvw = ray_origin/vec3<f32>(block_group_uniforms.size);
+    let _ray_origin = in.local_position.xyz; // This is `ro`
+    let ray_origin = _ray_origin + ray_direction * 0.001;
 
     // We can precompute "signs" for the direction of changes to the 
     // photon position since these never change
@@ -163,7 +143,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         floor(ray_origin) + 1.0 - ray_origin, 
         ray_direction > vec3(0.0)              
     );
-    var ray_voxel_position: vec3<i32> = vec3<i32>(clamp(ray_origin, vec3(0.0), vec3<f32>(block_group_uniforms.size)) + ray_direction*0.01);
+    var ray_voxel_position: vec3<i32> = vec3<i32>(ray_origin);
     var current_voxel_block_type: u32;
     
     var ray_last_intersection_plane = 0; // 0 = YZ; 1 = XZ; 2 = XY;
@@ -265,8 +245,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let atlas_size = vec2<f32>(textureDimensions(material_atlas));
     var atlas_uv = (material.atlas_position + uv * material.atlas_size) / atlas_size;
 
-    //col = textureSample(material_atlas, material_atlas_s, atlas_uv);
-    col = vec4(test_colors[(current_voxel_block_type-1) % 16], 1.0);
+    col = textureSample(material_atlas, material_atlas_s, atlas_uv);
+    //col = vec4(test_colors[(current_voxel_block_type-1) % 16], 1.0);
 
     /* Simple Lighting */
     let light_origin = normalize(vec3(0.5, 0.0, 1.0));

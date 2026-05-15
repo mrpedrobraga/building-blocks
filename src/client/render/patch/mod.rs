@@ -208,7 +208,7 @@ impl WorldRenderState {
 fn camera_orbit(_block_group_size: Vec3, _time: f32) -> Camera {
     let distance = 50.0;
     let mut cam = Camera::new(
-        vec3(distance, distance, distance * 0.5).rotate_z(_time * 0.125 * f32::consts::TAU).mul(1.0),
+        vec3(distance, distance, distance * 2.0).rotate_z(_time * 0.125 * f32::consts::TAU).mul(1.0),
         Quat::default(),
         CameraProjection::Perspective {
             vertical_fov_radians: 60.0_f32.to_radians(),
