@@ -137,63 +137,51 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var depth: f32 = in.clip_position.z;
     var col: vec4<f32>;
 
-    /* Digital Differential Analyzer */
-    
-    /* 
-                    |
-                    X  A ray originating from inside a block will intersect the lattice either on the x or y axis,
-                  . |  depending on whether whether its `ray_direction`'s x coordinate or y is greater.
-    -------------Y---  
-    |    | rd .     |  (mx, my) = (dda_sides_dist)
-    | my | .        |  ro = ray_origin
-    |   ro----------|  rd = ray_direction
-    |         mx    |  Y and X are possible intersection points (in the example illustrated we'd pick Y since my < mx).
-    |               |
-    |               |  Y = my * |d/dy|    (Since `d = 1.0` this is `1.0/dy`. Absolute value to prevent sign flippage.)
-    -----------------  X = mx * |d/dx|    These are precomputed on `dda_step`.
-
-    ...X.       |        |        |        |
-       | .....  |        |        |        |              If we consider a ray travel in only the X axis,
-       |      ..X..      |        |        |              we see that it always steps of the same size (x = 1.0; y = )
-       |        |  ..... |        |        |
-       |        |       .X...     |        |
-       |        |        |   .....|        |
-       |        |        |        X....    |
-       |        |        |        |    ....X
-       |        |        |        |        |.....
-       |        |        |        |        |
-
-                                          It's wonderful that as the photon traverses the grid,
-                                          we make decisions on which direction it steps in,
-                                          but for each direction, the step size is ALWAYS the same (`d/d_axis`)
-                                          and so we can precompute it.
-    
+    /*
+        Digital Differential Analyzer
         - [More information](https://www.youtube.com/watch?v=NbSee-XM7WA);
-
     */
 
     let world_ray_dir = (in.world_position.xyz - world_uniforms.camera_world_position.xyz);
     let ray_direction = normalize((block_group_uniforms.inv_transform * vec4<f32>(world_ray_dir, 0.0)).xyz); // This is `rd`
     let ray_origin = in.local_position.xyz; // This is `ro`
+    let uvw = ray_origin/vec3<f32>(block_group_uniforms.size);
 
     // We can precompute "signs" for the direction of changes to the 
     // photon position since these never change
     // (if a ray's, say, X coordinate is increasing, it'll continue to increase, and so on.)
     var dda_voxel_step = vec3<i32>(sign(ray_direction));
-    let dda_step = 1.0 / abs(ray_direction); // This is `(d/dx, d/dy, d/dz)`.
 
-    var dda_sides_dist: vec3<f32> = dda_step * select(  // This is `m`
+    // This is `(d/dx, d/dy, d/dz)`.
+    // Another way of thinking about `d/dx` is the distance the ray
+    // will travel across its length to traverse 1 unit in the x axis,
+    // and likewise for the other axes.
+    let dda_step = 1.0 / abs(ray_direction);
+
+    var dda_dist_to_plane: vec3<f32> = dda_step * select(  // This is `m`
         ray_origin - floor(ray_origin),
         floor(ray_origin) + 1.0 - ray_origin, 
         ray_direction > vec3(0.0)              
     );
-    var ray_voxel_position: vec3<i32> = vec3<i32>(ray_origin + ray_direction * 1e-4);
-    var ray_last_intersection_plane = 0; // 0 = YZ; 1 = XZ; 2 = XY;
+    var ray_voxel_position: vec3<i32> = vec3<i32>(clamp(ray_origin, vec3(0.0), vec3<f32>(block_group_uniforms.size)) + ray_direction*0.01);
     var current_voxel_block_type: u32;
     
+    var ray_last_intersection_plane = 0; // 0 = YZ; 1 = XZ; 2 = XY;
+
+    let dist_to_min = abs(ray_origin);
+    let dist_to_max = abs(vec3<f32>(block_group_uniforms.size) - ray_origin);
+    let min_dists = min(dist_to_min, dist_to_max);
+    
+    if (min_dists.x <= min_dists.y && min_dists.x <= min_dists.z) {
+        ray_last_intersection_plane = 0;
+    } else if (min_dists.y <= min_dists.x && min_dists.y <= min_dists.z) {
+        ray_last_intersection_plane = 1;
+    } else {
+        ray_last_intersection_plane = 2;
+    }
+
     var raymarching_iteration_idx = 0;
-    let max_step_count = i32(max(max(block_group_uniforms.size.x, block_group_uniforms.size.y), block_group_uniforms.size.z));
-    for (; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
+    let max_step_count = i32(block_group_uniforms.size.x + block_group_uniforms.size.y + block_group_uniforms.size.z);    for (; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
         /* If we leave the AABB, give up! */
         if (!is_inside_box(ray_voxel_position, vec3(0, 0, 0), vec3<i32>(block_group_uniforms.size))) {
             discard;
@@ -207,28 +195,28 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             break;
         }
 
-        // Here is where we pick the intersection point (Y, X or Z)...
-        if (dda_sides_dist.x < dda_sides_dist.y) {
-            if (dda_sides_dist.x < dda_sides_dist.z) {
+        // The step we take depends on the plane we intersect.
+        if (dda_dist_to_plane.x < dda_dist_to_plane.y) {
+            if (dda_dist_to_plane.x < dda_dist_to_plane.z) {
                 // X (YZ plane)
-                dda_sides_dist.x += dda_step.x;           //
+                dda_dist_to_plane.x += dda_step.x;           //
                 ray_voxel_position.x += dda_voxel_step.x; // we _always_ go to an adjacent voxel when we take a step!
                 ray_last_intersection_plane = 0;
             } else {
                 // Z (XY plane)
-                dda_sides_dist.z += dda_step.z;
+                dda_dist_to_plane.z += dda_step.z;
                 ray_voxel_position.z += dda_voxel_step.z;
                 ray_last_intersection_plane = 2;
             }
         } else {
-            if (dda_sides_dist.y < dda_sides_dist.z) {
+            if (dda_dist_to_plane.y < dda_dist_to_plane.z) {
                 // Y (XZ plane)
-                dda_sides_dist.y += dda_step.y;
+                dda_dist_to_plane.y += dda_step.y;
                 ray_voxel_position.y += dda_voxel_step.y;
                 ray_last_intersection_plane = 1;
             } else {
                 // Z (XY plane)
-                dda_sides_dist.z += dda_step.z;
+                dda_dist_to_plane.z += dda_step.z;
                 ray_voxel_position.z += dda_voxel_step.z;
                 ray_last_intersection_plane = 2;
             }
@@ -237,18 +225,21 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     /* Ray has hit something, for real! */
 
-    var t: f32;
-    if (ray_last_intersection_plane == 0) {
-        t = dda_sides_dist.x - dda_step.x;
+    var travelled_distance: f32;
+    if (raymarching_iteration_idx == 0) {
+        travelled_distance = 0.0;
+    }
+    else if (ray_last_intersection_plane == 0) {
+        travelled_distance = dda_dist_to_plane.x - dda_step.x;
     }
     else if (ray_last_intersection_plane == 1) {
-        t = dda_sides_dist.y - dda_step.y;
+        travelled_distance = dda_dist_to_plane.y - dda_step.y;
     }
     else {
-        t = dda_sides_dist.z - dda_step.z;
+        travelled_distance = dda_dist_to_plane.z - dda_step.z;
     }
 
-    let ray_hit_pos = ray_origin + ray_direction * t;
+    let ray_hit_pos = ray_origin + ray_direction * travelled_distance;
     let ray_hit_pos_within_block = ray_hit_pos - floor(ray_hit_pos);
 
     /* Texturing the hit block (only applies in full LOD) */
@@ -272,26 +263,19 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let appearance = block_appearance_palette[current_voxel_block_type - 1];
     let material = appearance.material;
     let atlas_size = vec2<f32>(textureDimensions(material_atlas));
-    let atlas_uv = (material.atlas_position + uv * material.atlas_size) / atlas_size;
+    var atlas_uv = (material.atlas_position + uv * material.atlas_size) / atlas_size;
 
     //col = textureSample(material_atlas, material_atlas_s, atlas_uv);
     col = vec4(test_colors[(current_voxel_block_type-1) % 16], 1.0);
 
     /* Simple Lighting */
-    let light = normalize(vec3(0.5, 0.0, 1.0));
-    col *= 0.25 + 0.75 * saturate( dot(normal, light) );
+    let light_origin = normalize(vec3(0.5, 0.0, 1.0));
+    let luminosity = saturate( dot(normal, light_origin) );
+    col *= 0.5 + 0.5 * luminosity;
     
     let ray_hit_world_pos = block_group_uniforms.transform * vec4(ray_hit_pos, 1.0);
     let ray_hit_clip_pos = world_uniforms.view_matrix * ray_hit_world_pos;
-    //depth = t;
     depth = ray_hit_clip_pos.z / ray_hit_clip_pos.w;
-    
-    //col = vec4(vec3(1.0) - vec3(ray_hit_world_pos.z / 20.0), col.a);
-    
-    // /* HEATMAP */
-    // col = vec4(vec3( f32(raymarching_iteration_idx) / 200.0 ), 1.0);
-    // /* Undoes LINEAR to SRGB conversion, useful for visualizing mathematical data. */
-    // col = vec4(srgbToLinear(col.rgb), col.a);
 
     return FragmentOutput(depth, col);
 }
