@@ -134,18 +134,50 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     if (!dda_primary.hit) { discard; }
 
-    let appearance = block_appearance_palette[dda_primary.hit_block_type - 1];
-    let material = appearance.material;
-    let atlas_size = vec2<f32>(textureDimensions(material_atlas));
-    var atlas_uv = (material.atlas_position + dda_primary.hit_uv * material.atlas_size) / atlas_size;
+    // FANCY REFLECTED BLOCKS
+    if (dda_primary.hit_block_type == 2) {
+        let reflected_ray = reflect(ray_direction, dda_primary.hit_normal);
+        let dda_reflection = dda_traverse(dda_primary.hit_position + reflected_ray * 0.001, reflected_ray);
+    
+        let atlas_size = vec2<f32>(textureDimensions(material_atlas));
 
-    col = textureSample(material_atlas, material_atlas_s, atlas_uv);
-    //col = vec4(test_colors[dda_primary.hit_block_type % 16], 1.0);
+        let appearance = block_appearance_palette[dda_primary.hit_block_type - 1];
+        let material = appearance.material;
+        var atlas_uv = (material.atlas_position + dda_primary.hit_uv * material.atlas_size) / atlas_size;
 
-    /* Simple Lighting */
-    let light_origin = normalize(vec3(0.5, 0.0, 1.0));
-    let luminosity = saturate( dot(dda_primary.hit_normal, light_origin) );
-    col *= 0.5 + 0.5 * luminosity;
+        let col_albedo = textureSample(material_atlas, material_atlas_s, atlas_uv);
+        var col_reflected = vec4(0.9, 0.9, 0.9, 1.0);
+
+        if (dda_reflection.hit) {
+            let r_appearance = block_appearance_palette[dda_reflection.hit_block_type - 1];
+            let r_material = r_appearance.material;
+            var r_atlas_uv = (r_material.atlas_position + dda_reflection.hit_uv * r_material.atlas_size) / atlas_size;
+        
+            col_reflected = textureSample(material_atlas, material_atlas_s, r_atlas_uv);
+        }
+        col = mix(col_albedo, col_reflected, 0.5);
+    } else {
+        let appearance = block_appearance_palette[dda_primary.hit_block_type - 1];
+        let material = appearance.material;
+        let atlas_size = vec2<f32>(textureDimensions(material_atlas));
+        var atlas_uv = (material.atlas_position + dda_primary.hit_uv * material.atlas_size) / atlas_size;
+    
+        col = textureSample(material_atlas, material_atlas_s, atlas_uv);
+        //col = vec4(test_colors[dda_primary.hit_block_type % 16], 1.0);
+    }
+    
+    // Fancy raytraced shadows...
+    var luminosity: f32;
+    let light_direction = normalize(vec3(2.0, 1.0, 1.0));
+
+    // let dda_secondary = dda_traverse(dda_primary.hit_position + light_direction * 0.001, light_direction);
+    // if (dda_secondary.hit) {
+    //     // If we hit a block, we are in shadow.
+    //     luminosity = 0.0;
+    // } else {
+        luminosity = saturate( dot(dda_primary.hit_normal, light_direction) );
+    // }    
+    col *= 0.25 + 0.75 * luminosity;
     
     let ray_hit_world_pos = block_group_uniforms.transform * vec4(dda_primary.hit_position, 1.0);
     let ray_hit_clip_pos = world_uniforms.view_matrix * ray_hit_world_pos;
