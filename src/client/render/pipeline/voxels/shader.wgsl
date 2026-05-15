@@ -1,3 +1,15 @@
+/* Universe Bind Group */
+@group(0) @binding(0) var<storage, read> block_appearance_palette: array<BlockAppearance>;
+@group(0) @binding(1) var material_atlas: texture_2d<f32>;
+@group(0) @binding(2) var material_atlas_s: sampler;
+
+/* World Bind Group */
+@group(1) @binding(0) var<uniform> world_uniforms: WorldUniforms;
+
+/* Block Group Bind Group */
+@group(2) @binding(0) var<uniform> block_group_uniforms: BlockClusterUniforms; 
+@group(2) @binding(1) var<storage, read> block_group_data: array<u32>;
+
 struct BlockAppearance {
     material: RenderMaterial,
 };
@@ -22,18 +34,6 @@ struct BlockClusterUniforms {
     size: vec3<u32>,
     _padding: u32
 }
-
-/* Universe Bind Group */
-@group(0) @binding(0) var<storage, read> block_appearance_palette: array<BlockAppearance>;
-@group(0) @binding(1) var material_atlas: texture_2d<f32>;
-@group(0) @binding(2) var material_atlas_s: sampler;
-
-/* World Bind Group */
-@group(1) @binding(0) var<uniform> world_uniforms: WorldUniforms;
-
-/* Block Group Bind Group */
-@group(2) @binding(0) var<uniform> block_group_uniforms: BlockClusterUniforms; 
-@group(2) @binding(1) var<storage, read> block_group_data: array<u32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -124,6 +124,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     let world_ray_dir = (in.world_position.xyz - world_uniforms.camera_world_position.xyz);
     let ray_direction = normalize((block_group_uniforms.inv_transform * vec4<f32>(world_ray_dir, 0.0)).xyz); // This is `rd`
+    
+    // TODO: Use the back faces of the box. The starting position of the ray should lie where
+    // the front faces are — we can get there using a single DDA leap on the AABB!
     let _ray_origin = in.local_position.xyz; // This is `ro`
     let ray_origin = _ray_origin + ray_direction * 0.001;
 
@@ -165,11 +168,11 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let max_step_count = i32(block_group_uniforms.size.x + block_group_uniforms.size.y + block_group_uniforms.size.z);
     for (; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
         /* If we leave the AABB, give up! */
-        if (!is_inside_box(ray_voxel_position, vec3(0, 0, 0), vec3<i32>(block_group_uniforms.size))) {
+        if (!aabb_contains(ray_voxel_position, vec3(0, 0, 0), vec3<i32>(block_group_uniforms.size))) {
             discard;
         }
         
-        current_voxel_idx = voxel_position_to_idx(vec3<u32>(ray_voxel_position));
+        current_voxel_idx = voxel_position_encode(vec3<u32>(ray_voxel_position));
         current_voxel_block_type = block_group_data[current_voxel_idx];
 
         /* Stop traversing if the current block is not air. */
@@ -263,21 +266,25 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     return FragmentOutput(depth, col);
 }
 
-fn voxel_position_to_idx(local_position_i: vec3<u32>) -> u32 {
-    return local_position_i.x +
-        local_position_i.y * block_group_uniforms.size.x +
-        local_position_i.z * block_group_uniforms.size.x * block_group_uniforms.size.y;
+/// From a voxel position, retrieves an index to sample from the voxel buffer.
+fn voxel_position_encode(local_position: vec3<u32>) -> u32 {
+    return local_position.x +
+        local_position.y * block_group_uniforms.size.x +
+        local_position.z * block_group_uniforms.size.x * block_group_uniforms.size.y;
 }
 
-fn is_inside_box(
+/// Returns whether a point is inside an AABB (end-exclusive).
+fn aabb_contains(
     point: vec3<i32>,
-    box_min: vec3<i32>,
-    box_max: vec3<i32>
+    aabb_min: vec3<i32>,
+    aabb_max: vec3<i32>
 ) -> bool {
-    return all(point >= box_min) && all(point < box_max);
+    return all(point >= aabb_min) && all(point < aabb_max);
 }
 
-fn missingTexture(uv: vec2<f32>) -> vec4<f32> {
+/// A simple procedurally generated 'missing texture' in case any voxels
+/// refer to a texture that's not in the texture buffer.
+fn tex_missing_texture(uv: vec2<f32>) -> vec4<f32> {
     let grid = floor(uv * vec2(2.0));
     if (i32(grid.x + grid.y) % 2 == 0) {
         return vec4(0.0, 0.0, 0.0, 1.0);
@@ -286,7 +293,11 @@ fn missingTexture(uv: vec2<f32>) -> vec4<f32> {
     }
 }
 
-fn srgbToLinear(srgb: vec3<f32>) -> vec3<f32> {
+/// Converts a colour from SRGB to linear.
+/// Because of automatic Linear to SRGB conversion the engine uses,
+/// when trying to render accurate colours for debugging (like UV, normals, etc),
+/// we use this to "cancel out" the conversion.
+fn srgb_to_linear(srgb: vec3<f32>) -> vec3<f32> {
     let cutoff = 0.04045;
     let higher = pow((srgb + vec3<f32>(0.055)) / vec3<f32>(1.055), vec3<f32>(2.4));
     let lower = srgb / vec3<f32>(12.92);
