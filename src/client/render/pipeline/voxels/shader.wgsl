@@ -140,7 +140,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var atlas_uv = (material.atlas_position + dda_primary.hit_uv * material.atlas_size) / atlas_size;
 
     col = textureSample(material_atlas, material_atlas_s, atlas_uv);
-    //col = vec4(test_colors[current_voxel_idx % 16], 1.0);
+    //col = vec4(test_colors[dda_primary.hit_block_type % 16], 1.0);
 
     /* Simple Lighting */
     let light_origin = normalize(vec3(0.5, 0.0, 1.0));
@@ -184,7 +184,7 @@ fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
     var dda_distances: vec3<f32> = dda_step * select(
         start - floor(start),
         floor(start) + 1.0 - start,
-        start > vec3(0.0)
+        direction > vec3(0.0)
     );
 
     var current_voxel: vec3<i32> = vec3<i32>(start);
