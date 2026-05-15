@@ -130,136 +130,24 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let _ray_origin = in.local_position.xyz; // This is `ro`
     let ray_origin = _ray_origin + ray_direction * 0.001;
 
-    // We can precompute "signs" for the direction of changes to the 
-    // photon position since these never change
-    // (if a ray's, say, X coordinate is increasing, it'll continue to increase, and so on.)
-    var dda_voxel_step = vec3<i32>(sign(ray_direction));
+    let dda_primary = dda_traverse(ray_origin, ray_direction);
 
-    // This is `(d/dx, d/dy, d/dz)`.
-    // Another way of thinking about `d/dx` is the distance the ray
-    // will travel across its length to traverse 1 unit in the x axis,
-    // and likewise for the other axes.
-    let dda_step = 1.0 / abs(ray_direction);
+    if (!dda_primary.hit) { discard; }
 
-    var dda_dist_to_plane: vec3<f32> = dda_step * select(  // This is `m`
-        ray_origin - floor(ray_origin),
-        floor(ray_origin) + 1.0 - ray_origin, 
-        ray_direction > vec3(0.0)              
-    );
-    var ray_voxel_position: vec3<i32> = vec3<i32>(ray_origin);
-    var current_voxel_block_type: u32;
-    var current_voxel_idx: u32;
-    
-    var ray_last_intersection_plane = 0; // 0 = YZ; 1 = XZ; 2 = XY;
-
-    let dist_to_min = abs(ray_origin);
-    let dist_to_max = abs(vec3<f32>(block_group_uniforms.size) - ray_origin);
-    let min_dists = min(dist_to_min, dist_to_max);
-    
-    if (min_dists.x <= min_dists.y && min_dists.x <= min_dists.z) {
-        ray_last_intersection_plane = 0;
-    } else if (min_dists.y <= min_dists.x && min_dists.y <= min_dists.z) {
-        ray_last_intersection_plane = 1;
-    } else {
-        ray_last_intersection_plane = 2;
-    }
-
-    var raymarching_iteration_idx = 0;
-    let max_step_count = i32(block_group_uniforms.size.x + block_group_uniforms.size.y + block_group_uniforms.size.z);
-    for (; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
-        /* If we leave the AABB, give up! */
-        if (!aabb_contains(ray_voxel_position, vec3(0, 0, 0), vec3<i32>(block_group_uniforms.size))) {
-            discard;
-        }
-        
-        current_voxel_idx = voxel_position_encode(vec3<u32>(ray_voxel_position));
-        current_voxel_block_type = block_group_data[current_voxel_idx];
-
-        /* Stop traversing if the current block is not air. */
-        if (current_voxel_block_type != 0) {
-            // TODO: Some blocks might have parts of it that aren't solid!
-            break;
-        }
-
-        // The step we take depends on the plane we intersect.
-        if (dda_dist_to_plane.x < dda_dist_to_plane.y) {
-            if (dda_dist_to_plane.x < dda_dist_to_plane.z) {
-                // X (YZ plane)
-                dda_dist_to_plane.x += dda_step.x;           //
-                ray_voxel_position.x += dda_voxel_step.x; // we _always_ go to an adjacent voxel when we take a step!
-                ray_last_intersection_plane = 0;
-            } else {
-                // Z (XY plane)
-                dda_dist_to_plane.z += dda_step.z;
-                ray_voxel_position.z += dda_voxel_step.z;
-                ray_last_intersection_plane = 2;
-            }
-        } else {
-            if (dda_dist_to_plane.y < dda_dist_to_plane.z) {
-                // Y (XZ plane)
-                dda_dist_to_plane.y += dda_step.y;
-                ray_voxel_position.y += dda_voxel_step.y;
-                ray_last_intersection_plane = 1;
-            } else {
-                // Z (XY plane)
-                dda_dist_to_plane.z += dda_step.z;
-                ray_voxel_position.z += dda_voxel_step.z;
-                ray_last_intersection_plane = 2;
-            }
-        }
-    }
-
-    /* Ray has hit something, for real! */
-
-    var travelled_distance: f32;
-    if (raymarching_iteration_idx == 0) {
-        travelled_distance = 0.0;
-    }
-    else if (ray_last_intersection_plane == 0) {
-        travelled_distance = dda_dist_to_plane.x - dda_step.x;
-    }
-    else if (ray_last_intersection_plane == 1) {
-        travelled_distance = dda_dist_to_plane.y - dda_step.y;
-    }
-    else {
-        travelled_distance = dda_dist_to_plane.z - dda_step.z;
-    }
-
-    let ray_hit_pos = ray_origin + ray_direction * travelled_distance;
-    let ray_hit_pos_within_block = ray_hit_pos - floor(ray_hit_pos);
-
-    /* Texturing the hit block (only applies in full LOD) */
-
-    var uv: vec2<f32>;
-    var normal: vec3<f32>;
-
-    if (ray_last_intersection_plane == 0) {
-        uv = ray_hit_pos_within_block.zy;
-        normal.x = -f32(dda_voxel_step.x);
-    }
-    else if (ray_last_intersection_plane == 1) {
-        uv = ray_hit_pos_within_block.xz;
-        normal.y = -f32(dda_voxel_step.y);
-    }
-    else {
-        uv = ray_hit_pos_within_block.xy;
-        normal.z = -f32(dda_voxel_step.z);
-    }
-
-    let appearance = block_appearance_palette[current_voxel_block_type - 1];
+    let appearance = block_appearance_palette[dda_primary.hit_block_type - 1];
     let material = appearance.material;
     let atlas_size = vec2<f32>(textureDimensions(material_atlas));
-    var atlas_uv = (material.atlas_position + uv * material.atlas_size) / atlas_size;
+    var atlas_uv = (material.atlas_position + dda_primary.hit_uv * material.atlas_size) / atlas_size;
 
     col = textureSample(material_atlas, material_atlas_s, atlas_uv);
     //col = vec4(test_colors[current_voxel_idx % 16], 1.0);
 
     /* Simple Lighting */
     let light_origin = normalize(vec3(0.5, 0.0, 1.0));
-    let luminosity = saturate( dot(normal, light_origin) );
+    let luminosity = saturate( dot(dda_primary.hit_normal, light_origin) );
     col *= 0.5 + 0.5 * luminosity;
     
-    let ray_hit_world_pos = block_group_uniforms.transform * vec4(ray_hit_pos, 1.0);
+    let ray_hit_world_pos = block_group_uniforms.transform * vec4(dda_primary.hit_position, 1.0);
     let ray_hit_clip_pos = world_uniforms.view_matrix * ray_hit_world_pos;
     depth = ray_hit_clip_pos.z / ray_hit_clip_pos.w;
 
@@ -271,6 +159,7 @@ struct TraversalOutput {
     hit_position: vec3<f32>,
     hit_normal: vec3<f32>,
     hit_uv: vec2<f32>,
+    hit_block_type: u32,
 }
 
 /// Performs Digital Differential Analysis traversal until something is hit
@@ -320,7 +209,7 @@ fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
     let max_step_count = i32(block_group_uniforms.size.x + block_group_uniforms.size.y + block_group_uniforms.size.z);
     for(; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
         if(!aabb_contains(current_voxel, vec3(0), vec3<i32>(block_group_uniforms.size))) {
-            return TraversalOutput(false, vec3(0.0), vec3(0.0), vec2(0.0));
+            return TraversalOutput(false, vec3(0.0), vec3(0.0), vec2(0.0), 0);
         }
 
         current_voxel_idx_in_buffer = voxel_position_encode(vec3<u32>(current_voxel));
@@ -389,6 +278,7 @@ fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
     result.hit_position = ray_hit_position;
     result.hit_normal = normal;
     result.hit_uv = uv;
+    result.hit_block_type = current_voxel_block_type;
     return result;
 }
 
