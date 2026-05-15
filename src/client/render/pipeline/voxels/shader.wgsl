@@ -266,6 +266,132 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     return FragmentOutput(depth, col);
 }
 
+struct TraversalOutput {
+    hit: bool,
+    hit_position: vec3<f32>,
+    hit_normal: vec3<f32>,
+    hit_uv: vec2<f32>,
+}
+
+/// Performs Digital Differential Analysis traversal until something is hit
+fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
+    // While performing DDA, we'll move along the grid
+    // in consistent integer steps.
+    // 
+    // TODO: Allow traversing the grid at different cell sizes,
+    // as a preparation for LOD traversal :-)
+    let voxel_step = vec3<i32>(sign(direction));
+
+    // This is `(rdr/rdx, rdr/rdy, rdr/rdz)`.
+    // Another way of thinking about `rdr/rdx` is the distance the ray
+    // will travel across its length to traverse 1 unit in the x axis,
+    // and likewise for the other axes.
+    let dda_step = 1.0 / abs(direction);
+
+    // These are the three ray distances from the starting point.
+    // As we step through the lattice, we compare which distance is
+    // the shortest so we can take the highest leaps we can,
+    // without missing any intersections with the lattice.
+    var dda_distances: vec3<f32> = dda_step * select(
+        start - floor(start),
+        floor(start) + 1.0 - start,
+        start > vec3(0.0)
+    );
+
+    var current_voxel: vec3<i32> = vec3<i32>(start);
+    var current_voxel_block_type: u32;
+    var current_voxel_idx_in_buffer: u32;
+    var last_intersection_plane = 0; // 0 = YZ; 1 = XZ; 2 = XY;
+
+    var dist_to_volume_min = abs(start);
+    var dist_to_volume_max = abs(vec3<f32>(block_group_uniforms.size) - start);
+    let min_dists = min(dist_to_volume_min, dist_to_volume_max);
+
+    // TODO: Maybe I can use this to get the position on the front face, too?
+    if (min_dists.x <= min_dists.y && min_dists.x <= min_dists.z) {
+        last_intersection_plane = 0;
+    } else if (min_dists.y <= min_dists.x && min_dists.y <= min_dists.z) {
+        last_intersection_plane = 1;
+    } else {
+        last_intersection_plane = 2;
+    }
+
+    var raymarching_iteration_idx = 0;
+    let max_step_count = i32(block_group_uniforms.size.x + block_group_uniforms.size.y + block_group_uniforms.size.z);
+    for(; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
+        if(!aabb_contains(current_voxel, vec3(0), vec3<i32>(block_group_uniforms.size))) {
+            return TraversalOutput(false, vec3(0.0), vec3(0.0), vec2(0.0));
+        }
+
+        current_voxel_idx_in_buffer = voxel_position_encode(vec3<u32>(current_voxel));
+        current_voxel_block_type = block_group_data[current_voxel_idx_in_buffer];
+
+        // TODO: Use a more sophisticated way of detecting a hit.
+        if (current_voxel_block_type != 0 /* 0 = AIR */) {
+            break;
+        }
+
+        if (dda_distances.x < dda_distances.y) {
+            if (dda_distances.x < dda_distances.z) {
+                dda_distances.x += dda_step.x; // move one step in the x axis
+                current_voxel.x += voxel_step.x; // we always go to an adjacent voxel :-)
+                last_intersection_plane = 0;   // x axis = yz plane
+            } else {
+                dda_distances.z += dda_step.z;
+                current_voxel.z += voxel_step.z;
+                last_intersection_plane = 2;
+            }
+        } else {
+            if (dda_distances.y < dda_distances.z) {
+                dda_distances.y += dda_step.y;
+                current_voxel.y += voxel_step.y;
+                last_intersection_plane = 1;
+            } else {
+                dda_distances.z += dda_step.z;
+                current_voxel.z += voxel_step.z;
+                last_intersection_plane = 2;
+            }
+        }
+    }
+
+    /* Ray has hit something */
+    var travelled_distance: f32;
+
+    if raymarching_iteration_idx == 0 {
+        travelled_distance = 0.0;
+    } else if (last_intersection_plane == 0) {
+        travelled_distance = dda_distances.x - dda_step.x;
+    } else if (last_intersection_plane == 1) {
+        travelled_distance = dda_distances.y - dda_step.y;
+    } else /*if (last_intersection_plane == 2)*/ {
+        travelled_distance = dda_distances.z - dda_step.z;
+    }
+
+    let ray_hit_position = start + direction * travelled_distance;
+    let ray_hit_uvw = ray_hit_position - floor(ray_hit_position);
+
+    var uv: vec2<f32>;
+    var normal: vec3<f32>;
+
+    if (last_intersection_plane == 0) {
+        uv = ray_hit_uvw.zy;
+        normal.x = f32( -voxel_step.x );
+    } else if (last_intersection_plane == 1) {
+        uv = ray_hit_uvw.xz;
+        normal.y = f32( -voxel_step.y );
+    } else /*if (last_intersection_plane == 2)*/ {
+        uv = ray_hit_uvw.xy;
+        normal.z = f32( -voxel_step.z );
+    }
+
+    var result = TraversalOutput();
+    result.hit = true;
+    result.hit_position = ray_hit_position;
+    result.hit_normal = normal;
+    result.hit_uv = uv;
+    return result;
+}
+
 /// From a voxel position, retrieves an index to sample from the voxel buffer.
 fn voxel_position_encode(local_position: vec3<u32>) -> u32 {
     return local_position.x +
