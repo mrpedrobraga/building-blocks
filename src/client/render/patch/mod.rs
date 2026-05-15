@@ -224,7 +224,7 @@ fn camera_orbit(_block_group_size: Vec3, _time: f32) -> Camera {
     // );
     // cam.look_at(vec3(20.0, 0.0, 4.0).rotate_z(_time * (1.0/16.0) * f32::consts::TAU).mul(1.0), Vec3::Z);
     let mut cam = Camera::new(
-        vec3(10.0, 10.0, 0.0) + vec3(5.0, 5.0, 22.0).rotate_z(_time * 0.01 * f32::consts::TAU),
+        vec3(10.0, 10.0, 22.0) + vec3(5.0, 0.0, 0.0).rotate_z(_time * 0.03 * f32::consts::TAU),
         Quat::default(),
         CameraProjection::Perspective {
             vertical_fov_radians: 60.0_f32.to_radians(),
@@ -402,6 +402,10 @@ impl BlockGroupRenderState {
 
                     if x == center.0 {
                         block.idx_in_palette = 2;
+                    }
+
+                    if x == center.0 + 5 && y == center.1 {
+                        block.idx_in_palette = 4;
                     }
                 }
             }
