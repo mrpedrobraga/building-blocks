@@ -145,6 +145,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     );
     var ray_voxel_position: vec3<i32> = vec3<i32>(ray_origin);
     var current_voxel_block_type: u32;
+    var current_voxel_idx: u32;
     
     var ray_last_intersection_plane = 0; // 0 = YZ; 1 = XZ; 2 = XY;
 
@@ -161,13 +162,15 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     }
 
     var raymarching_iteration_idx = 0;
-    let max_step_count = i32(block_group_uniforms.size.x + block_group_uniforms.size.y + block_group_uniforms.size.z);    for (; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
+    let max_step_count = i32(block_group_uniforms.size.x + block_group_uniforms.size.y + block_group_uniforms.size.z);
+    for (; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
         /* If we leave the AABB, give up! */
         if (!is_inside_box(ray_voxel_position, vec3(0, 0, 0), vec3<i32>(block_group_uniforms.size))) {
             discard;
         }
         
-        current_voxel_block_type = block_group_data[voxel_position_to_idx(vec3<u32>(ray_voxel_position))];
+        current_voxel_idx = voxel_position_to_idx(vec3<u32>(ray_voxel_position));
+        current_voxel_block_type = block_group_data[current_voxel_idx];
 
         /* Stop traversing if the current block is not air. */
         if (current_voxel_block_type != 0) {
@@ -246,7 +249,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var atlas_uv = (material.atlas_position + uv * material.atlas_size) / atlas_size;
 
     col = textureSample(material_atlas, material_atlas_s, atlas_uv);
-    //col = vec4(test_colors[(current_voxel_block_type-1) % 16], 1.0);
+    //col = vec4(test_colors[current_voxel_idx % 16], 1.0);
 
     /* Simple Lighting */
     let light_origin = normalize(vec3(0.5, 0.0, 1.0));

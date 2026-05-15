@@ -206,9 +206,8 @@ impl WorldRenderState {
 }
 
 fn camera_orbit(_block_group_size: Vec3, _time: f32) -> Camera {
-    let distance = 50.0;
     let mut cam = Camera::new(
-        vec3(distance, distance, distance * 2.0).rotate_z(_time * 0.125 * f32::consts::TAU).mul(1.0),
+        vec3(0.0, 0.0, 22.0),
         Quat::default(),
         CameraProjection::Perspective {
             vertical_fov_radians: 60.0_f32.to_radians(),
@@ -216,7 +215,7 @@ fn camera_orbit(_block_group_size: Vec3, _time: f32) -> Camera {
             z_far_clipping_plane: 10000.0,
         },
     );
-    cam.look_at(Vec3::ZERO, Vec3::Z);
+    cam.look_at(vec3(20.0, 0.0, 4.0).rotate_z(_time * (1.0/16.0) * f32::consts::TAU).mul(1.0), Vec3::Z);
     cam
 }
 
@@ -257,7 +256,6 @@ impl LayoutRenderState {
 
         let block_groups = vec![
             BlockGroupRenderState::example(gpu, 1),
-            BlockGroupRenderState::example(gpu, 2),
         ];
 
         Self {
@@ -325,15 +323,9 @@ impl BlockGroupRenderState {
     }
 
     pub fn example(gpu: &Gpu, material: u32) -> Self {
-        
-        let block_group_size = UVec3::new(100, 100, 21);
+        let block_group_size = UVec3::new(400, 400, 21);
         //let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
-        let mut transform = Mat4::from_translation(block_group_size.as_vec3() * vec3(-0.5, -0.5, 0.0));
-
-        if material == 2 {
-            transform = Mat4::from_translation(block_group_size.as_vec3() * vec3(-1.0, -1.0, 0.2));
-        }
-
+        let transform = Mat4::from_translation(block_group_size.as_vec3() * vec3(-0.5, -0.5, 0.0));
         let uniforms = BlockGroupUniforms {
             transform: transform.to_cols_array(),
             inv_transform: transform.inverse().to_cols_array(),
