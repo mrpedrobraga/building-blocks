@@ -117,18 +117,15 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var depth: f32 = in.clip_position.z;
     var col: vec4<f32>;
 
-    /*
-        Digital Differential Analyzer
-        - [More information](https://www.youtube.com/watch?v=NbSee-XM7WA);
-    */
+    // Visualize the triangles.
+    //return FragmentOutput(depth, vec4(srgb_to_linear(test_colors[in.triangle_idx % 16]), 1.0));
 
-    let world_ray_dir = (in.world_position.xyz - world_uniforms.camera_world_position.xyz);
-    let ray_direction = normalize((block_group_uniforms.inv_transform * vec4<f32>(world_ray_dir, 0.0)).xyz); // This is `rd`
+    let local_camera_position = block_group_uniforms.inv_transform * vec4<f32>(world_uniforms.camera_world_position.xyz, 1.0);
     
-    // TODO: Use the back faces of the box. The starting position of the ray should lie where
-    // the front faces are — we can get there using a single DDA leap on the AABB!
-    let _ray_origin = in.local_position.xyz; // This is `ro`
-    let ray_origin = _ray_origin + ray_direction * 0.001;
+    var _ray_unorm = in.local_position.xyz - local_camera_position.xyz;
+    var _ray_origin = dda_aabb_step(in.local_position.xyz, -_ray_unorm);
+    let ray_direction = normalize(_ray_unorm); // This is `rd`
+    let ray_origin = _ray_origin + ray_direction * 0.001; // This is `ro`... for floating point reasons it's slightly biased!
 
     let dda_primary = dda_traverse(ray_origin, ray_direction);
 
@@ -188,11 +185,16 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let ray_hit_clip_pos = world_uniforms.view_matrix * ray_hit_world_pos;
     depth = ray_hit_clip_pos.z / ray_hit_clip_pos.w;
 
+    // Simple fog :-)
+    let distance = distance(local_camera_position.xyz, ray_origin) + dda_primary.hit_distance;
+    col = mix(col, vec4(0.9, 0.9, 0.9, 1.0), saturate(distance * distance * 0.00001));
+
     return FragmentOutput(depth, col);
 }
 
 struct TraversalOutput {
     hit: bool,
+    hit_distance: f32,
     hit_position: vec3<f32>,
     hit_normal: vec3<f32>,
     hit_uv: vec2<f32>,
@@ -201,6 +203,11 @@ struct TraversalOutput {
 
 /// Performs Digital Differential Analysis traversal until something is hit
 fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
+    /*
+        Digital Differential Analyzer
+        - [More information](https://www.youtube.com/watch?v=NbSee-XM7WA);
+    */
+
     // While performing DDA, we'll move along the grid
     // in consistent integer steps.
     // 
@@ -246,7 +253,7 @@ fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
     let max_step_count = i32(block_group_uniforms.size.x + block_group_uniforms.size.y + block_group_uniforms.size.z);
     for(; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
         if(!aabb_contains(current_voxel, vec3(0), vec3<i32>(block_group_uniforms.size))) {
-            return TraversalOutput(false, vec3(0.0), vec3(0.0), vec2(0.0), 0);
+            return TraversalOutput(false, 0.0, vec3(0.0), vec3(0.0), vec2(0.0), 0);
         }
 
         current_voxel_idx_in_buffer = voxel_position_encode(vec3<u32>(current_voxel));
@@ -312,11 +319,30 @@ fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
 
     var result = TraversalOutput();
     result.hit = true;
+    result.hit_distance = travelled_distance;
     result.hit_position = ray_hit_position;
     result.hit_normal = normal;
     result.hit_uv = uv;
     result.hit_block_type = current_voxel_block_type;
     return result;
+}
+
+
+/// Performs a single step of Digital Differential Analysis to go from a point in a back face plane
+/// to the front face.
+fn dda_aabb_step(backface_point: vec3<f32>, ray_to_camera: vec3<f32>) -> vec3<f32> {
+    let start = backface_point;
+    let camera_dist = length(ray_to_camera);
+    let direction = normalize(ray_to_camera);
+    let dda_step = 1.0/abs(direction);
+    let dda_distances = dda_step * select(
+        start,
+        vec3<f32>(block_group_uniforms.size) - start,
+        direction > vec3(0.0)
+    );
+    var travelled_distance = min(camera_dist,min(min(dda_distances.x, dda_distances.y), dda_distances.z));
+    let end = start + direction * (travelled_distance - 1e-4);
+    return end;
 }
 
 /// From a voxel position, retrieves an index to sample from the voxel buffer.
@@ -331,6 +357,14 @@ fn aabb_contains(
     point: vec3<i32>,
     aabb_min: vec3<i32>,
     aabb_max: vec3<i32>
+) -> bool {
+    return all(point >= aabb_min) && all(point < aabb_max);
+}
+
+fn aabb_contains_f(
+    point: vec3<f32>,
+    aabb_min: vec3<f32>,
+    aabb_max: vec3<f32>
 ) -> bool {
     return all(point >= aabb_min) && all(point < aabb_max);
 }
