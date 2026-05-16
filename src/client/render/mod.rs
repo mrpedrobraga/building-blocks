@@ -73,6 +73,7 @@ pub struct BlockGroupRenderState {
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct BlockGroupUniforms {
     pub transform: [f32; 16],
+    pub inv_transform: [f32; 16],
     pub size: UVec3,
     pub _padding: u32,
 }

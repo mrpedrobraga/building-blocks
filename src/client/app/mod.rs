@@ -10,14 +10,10 @@
 use crate::client::render::{gpu::Gpu, render_target::window::WindowRenderTarget};
 use glam::UVec2;
 use smol::channel::Sender;
-use std::{sync::Arc, time::{Instant}};
+use std::{sync::Arc, time::Instant};
 use tracing::{error, info, info_span};
 use winit::{
-    application::ApplicationHandler,
-    dpi::LogicalSize,
-    event::WindowEvent,
-    event_loop::EventLoop,
-    window::{Window, WindowAttributes},
+    application::ApplicationHandler, dpi::LogicalSize, event::WindowEvent, event_loop::EventLoop, keyboard::Key, window::{Window, WindowAttributes}
 };
 
 pub struct Application {
@@ -125,6 +121,28 @@ impl ApplicationHandler for Application {
                     error!("[App] Failed to request the client to redraw...");
                     event_loop.exit();
                 }
+            }
+            WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _,
+            } => {
+                if let winit::event::ElementState::Pressed = event.state
+                    && event.logical_key == Key::Named(winit::keyboard::NamedKey::F4)
+                    && let Some(window) = self.window.as_ref() {
+                        let current_state = window.fullscreen();
+                        match current_state {
+                            Some(_) => window.set_fullscreen(None),
+                            None => window.set_fullscreen(Some(
+                                winit::window::Fullscreen::Borderless(window.current_monitor()),
+                            )),
+                        }
+                    }
+                if let winit::event::ElementState::Pressed = event.state
+                    && event.logical_key == Key::Named(winit::keyboard::NamedKey::Escape)
+                     {
+                        event_loop.exit();
+                    }
             }
             event => {
                 let message = AppMessage::WindowEvent(event);

@@ -105,6 +105,7 @@ impl Clone for BlockGroup {
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct BlockClusterGpuUniforms {
     pub transform: [f32; 16],
+    pub inv_transform: [f32; 16],
     pub size: UVec4,
 }
 

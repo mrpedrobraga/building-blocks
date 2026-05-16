@@ -16,6 +16,7 @@
 //!
 //!
 
+use glam::Vec4;
 use wgpu::{
     include_wgsl, BindGroupLayout, Device, PipelineLayoutDescriptor, PrimitiveState,
     RenderPipeline, RenderPipelineDescriptor, TextureFormat,
@@ -31,6 +32,7 @@ pub struct VoxelPipeline {
 #[derive(Default, Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct WorldUniforms {
     pub view_matrix: [f32; 16],
+    pub camera_world_position: Vec4,
     pub global_time: f32,
     pub _padding: [f32; 3],
 }
@@ -68,7 +70,7 @@ impl VoxelPipeline {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: Some(wgpu::Face::Front),
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,

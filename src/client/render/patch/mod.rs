@@ -1,7 +1,6 @@
 use core::f32;
-use std::ops::{Mul};
-
-use glam::{Mat4, Quat, UVec2, Vec3, vec3};
+use std::ops::Mul;
+use glam::{Mat4, Quat, UVec2, Vec3, Vec4, vec3};
 use wgpu::util::DeviceExt;
 
 use super::{gpu::Gpu, pipeline::voxels::WorldUniforms, *};
@@ -38,7 +37,23 @@ impl UniverseRenderState {
                         // TODO: Preinitialize some amount here, but not sure how much?
                         // maybe the server will know and tell me!
                         RenderMaterial {
-                            atlas_position: Vec2::new(0.0, 0.0),
+                            atlas_position: Vec2::new(8.0 * 0.0, 0.0),
+                            atlas_size: Vec2::new(8.0, 8.0),
+                        },
+                        RenderMaterial {
+                            atlas_position: Vec2::new(8.0 * 1.0, 0.0),
+                            atlas_size: Vec2::new(8.0, 8.0),
+                        },
+                        RenderMaterial {
+                            atlas_position: Vec2::new(8.0 * 2.0, 0.0),
+                            atlas_size: Vec2::new(8.0, 8.0),
+                        },
+                        RenderMaterial {
+                            atlas_position: Vec2::new(8.0 * 3.0, 0.0),
+                            atlas_size: Vec2::new(8.0, 8.0),
+                        },
+                        RenderMaterial {
+                            atlas_position: Vec2::new(8.0 * 4.0, 0.0),
                             atlas_size: Vec2::new(8.0, 8.0),
                         },
                     ]),
@@ -128,10 +143,12 @@ impl WorldRenderState {
         let block_group = &current_scene.root_layout.block_groups[0];
         let block_group_size = block_group.uniforms.size.as_vec3();
 
-        let view_matrix = camera_orbit(block_group_size, 0.0, UVec2::new(640, 640));
+        let cam = camera_orbit(block_group_size, 0.0);
+        let view_matrix = cam.view_matrix(UVec2::new(640, 640));
 
         let uniforms = WorldUniforms {
-            view_matrix,
+            view_matrix: view_matrix.to_cols_array(),
+            camera_world_position: Vec4::new(0.0, 0.0, 0.0, 1.0),
             global_time: 0.0,
             _padding: [0.0, 0.0, 0.0],
         };
@@ -169,14 +186,12 @@ impl WorldRenderState {
             .size
             .as_vec3();
 
-        let view_matrix = camera_orbit(
-            block_group_size,
-            self.beggining.elapsed().as_secs_f32(),
-            screen_size,
-        );
+        let cam = camera_orbit(block_group_size, self.beggining.elapsed().as_secs_f32());
+        let view_matrix = cam.view_matrix(screen_size);
 
         let uniforms = WorldUniforms {
-            view_matrix,
+            view_matrix: view_matrix.to_cols_array(),
+            camera_world_position: Vec4::new(cam.position.x, cam.position.y, cam.position.z, 1.0),
             global_time: self.beggining.elapsed().as_secs_f32(),
             _padding: [0.0, 0.0, 0.0],
         };
@@ -198,19 +213,28 @@ impl WorldRenderState {
     }
 }
 
-fn camera_orbit(_block_group_size: Vec3, _time: f32, screen_size: UVec2) -> [f32; 16] {
-    let distance = 200.0;
+fn camera_orbit(_block_group_size: Vec3, _time: f32) -> Camera {
+    // let mut cam = Camera::new(
+    //     vec3(0.0, 0.0, 10.0,),
+    //     Quat::default(),
+    //     CameraProjection::Perspective {
+    //         vertical_fov_radians: 60.0_f32.to_radians(),
+    //         z_near_clipping_plane: 0.1,
+    //         z_far_clipping_plane: 10000.0,
+    //     },
+    // );
+    // cam.look_at(vec3(20.0, 0.0, 10.0).rotate_z(_time * (1.0/16.0) * f32::consts::TAU).mul(1.0), Vec3::Z);
     let mut cam = Camera::new(
-        vec3(distance, distance, distance).rotate_z(_time * 0.125 * f32::consts::TAU).mul(1.0),
+        vec3(30.0, 0.0, 30.0).rotate_z(_time * f32::consts::TAU * 0.125),
         Quat::default(),
         CameraProjection::Perspective {
             vertical_fov_radians: 60.0_f32.to_radians(),
             z_near_clipping_plane: 0.1,
-            z_far_clipping_plane: 10000.0,
+            z_far_clipping_plane: 1000.0,
         },
     );
-    cam.look_at(Vec3::ZERO, Vec3::Z);
-    cam.view_matrix(screen_size).to_cols_array()
+    cam.look_at(vec3(0.0, 0.0, 5.0), Vec3::Z);
+    cam
 }
 
 impl CurrentSceneRenderState {
@@ -248,9 +272,7 @@ impl LayoutRenderState {
     pub fn example(gpu: &Gpu) -> Self {
         let sub_layouts = Vec::new();
 
-        let mut block_groups = Vec::new();
-        let block_group_0 = BlockGroupRenderState::example(gpu);
-        block_groups.push(block_group_0);
+        let block_groups = vec![BlockGroupRenderState::example(gpu, 1)];
 
         Self {
             block_groups,
@@ -269,6 +291,7 @@ impl BlockGroupRenderState {
     pub fn new(gpu: &Gpu) -> Self {
         let uniforms = BlockGroupUniforms {
             transform: Mat4::IDENTITY.to_cols_array(),
+            inv_transform: Mat4::IDENTITY.to_cols_array(),
             size: UVec3::new(0, 0, 0),
             _padding: 0,
         };
@@ -315,12 +338,13 @@ impl BlockGroupRenderState {
         }
     }
 
-    pub fn example(gpu: &Gpu) -> Self {
-        let block_group_size = UVec3::new(400, 400, 40);
+    pub fn example(gpu: &Gpu, _material: u32) -> Self {
+        let block_group_size = UVec3::new(400, 400, 21);
         //let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
-
+        let transform = Mat4::from_translation(block_group_size.as_vec3() * vec3(-0.5, -0.5, 0.0));
         let uniforms = BlockGroupUniforms {
-            transform: Mat4::from_translation(block_group_size.as_vec3().mul(-0.5)).to_cols_array(),
+            transform: transform.to_cols_array(),
+            inv_transform: transform.inverse().to_cols_array(),
             size: block_group_size,
             _padding: 0,
         };
@@ -332,23 +356,8 @@ impl BlockGroupRenderState {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
         // TODO: Preallocate more space.
-        let blocks_iter = (0..block_group_size.z)
-            .flat_map(|z| (0..block_group_size.y).map(move |y| (z, y)))
-            .flat_map(move |(z, y)| (0..block_group_size.x).map(move |x| (z, y, x)));
-        let block_appearance_data = blocks_iter
-            .map(|(z, y, x)| {
-                let point = Vec3::new(x as f32, y as f32, z as f32);
-                //let put_block = point.distance_squared(block_group_half_size) < block_group_half_size.x.powf(2.0);
-                let put_block = point.z < 10.0 + 5.0 * point.x.mul(0.1).sin() + 5.0 * point.y.mul(0.1).cos();
-
-                if put_block
-                {
-                    BlockAppearanceEntry { idx_in_palette: 1 }
-                } else {
-                    BlockAppearanceEntry { idx_in_palette: 0 }
-                }
-            })
-            .collect::<Vec<_>>();
+        let block_appearance_data = example_scene_1(block_group_size);
+        //let block_appearance_data = example_scene_2(block_group_size);
 
         let block_appearance_data_gpu =
             gpu.device
@@ -383,4 +392,67 @@ impl BlockGroupRenderState {
             bind_group,
         }
     }
+}
+
+fn example_scene_1(block_group_size: UVec3) -> Vec<BlockAppearanceEntry> {
+    (0..block_group_size.z)
+        .flat_map(|z| (0..block_group_size.y).map(move |y| (z, y)))
+        .flat_map(move |(z, y)| (0..block_group_size.x).map(move |x| (z, y, x)))
+        .map(|(z, y, x)| {
+            let point = Vec3::new(x as f32, y as f32, z as f32);
+            //let put_block = point.distance_squared(block_group_half_size) < block_group_half_size.x.powf(2.0);
+            let put_block = point.z < 10.0 + 5.0 * point.x.mul(0.1).sin() + 5.0 * point.y.mul(0.1).cos();
+
+            if put_block
+            {
+                BlockAppearanceEntry { idx_in_palette: 1 }
+            } else {
+                BlockAppearanceEntry { idx_in_palette: 0 }
+            }
+        })
+        .collect::<Vec<_>>()
+}
+
+fn example_scene_2(block_group_size: UVec3) -> Vec<BlockAppearanceEntry> {
+    let mut block_appearance_data = vec![
+        BlockAppearanceEntry { idx_in_palette: 0 };
+        (block_group_size.x * block_group_size.y * block_group_size.z)
+            as usize
+    ];
+    let u = (
+        block_group_size.x as usize,
+        block_group_size.y as usize,
+        block_group_size.z as usize,
+    );
+    let center = (u.0 / 2, u.1 / 2, u.2 / 2);
+    for z in 0..u.2 {
+        for y in 0..u.1 {
+            for x in 0..u.0 {
+                let block = block_appearance_data
+                    .get_mut(x + y * u.0 + z * u.0 * u.1)
+                    .unwrap();
+
+                // mirror
+                if x == 0 {
+                    block.idx_in_palette = 2;
+                }
+                // far wall
+                else if x == u.0-1 {
+                    block.idx_in_palette = 1;
+                }
+
+                // floor
+                if z == 0 {
+                    //block.idx_in_palette = 3 + (y as u32 + x as u32) % 3;
+                    block.idx_in_palette = 5;
+                }
+
+                // wood walls
+                if y == 0 || y == u.1-1 {
+                    block.idx_in_palette = 4;
+                }
+            }
+        }
+    }
+    block_appearance_data
 }

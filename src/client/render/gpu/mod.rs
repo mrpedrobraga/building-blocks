@@ -104,7 +104,7 @@ impl GameRenderer {
         {
             trace!("[Render] Rendering bind group...");
             pass.set_bind_group(2, &block_group.bind_group, &[]);
-            pass.draw(0..36, 0..block_group.block_appearance_data.len() as u32);
+            pass.draw(0..36, 0..1);
         }
     }
 
@@ -239,7 +239,7 @@ impl BlockGroupRenderState {
         };
         let block_group_data_entry = wgpu::BindGroupLayoutEntry {
             binding: 1,
-            visibility: wgpu::ShaderStages::VERTEX,
+            visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
