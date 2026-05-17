@@ -1,0 +1,14 @@
+{
+  "settings": [
+    {
+      "options": {
+        "websocket": {
+          "endpoint": "ws://127.0.0.1:3000"
+        },
+        "rest": {
+          "endpoint": "http://127.0.0.1:3000"
+        }
+      }
+    }
+  ]
+}

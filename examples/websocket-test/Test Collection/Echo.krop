@@ -1,0 +1,21 @@
+{
+  "details": {
+    "path": "/ws"
+  },
+  "requests": [
+    {
+      "location": "Echo-request-0.txt",
+      "type": "text"
+    },
+    {
+      "location": "Echo-request-1.txt",
+      "type": "text"
+    },
+    {
+      "location": "Echo-request-2.txt",
+      "type": "text"
+    }
+  ],
+  "operationType": "duplexStreaming",
+  "invokerName": "websocket"
+}
