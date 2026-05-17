@@ -133,7 +133,7 @@ impl Scripting {
 
         let mut sources = rune::Sources::new();
         sources
-            .insert(rune::Source::from_path("./src/server/test.rn").unwrap())
+            .insert(rune::Source::from_path("./crates/common/src/server/test.rn").unwrap())
             .unwrap();
 
         let mut diagnostics = rune::Diagnostics::new();

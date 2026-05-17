@@ -1,5 +1,12 @@
 [workspace]
-
+resolver = "3"
 members = [
-    "building-blocks",
+    "crates/common",
 ]
+
+[profile.release]
+opt-level = "z"     # Optimize for size ('s' is small, 'z' is even smaller)
+lto = true          # Enable Link Time Optimization (huge for size!)
+codegen-units = 1   # Reduces parallel compilation to allow for better optimization
+panic = "abort"     # Removes the "unwind" code; makes binary smaller, but you lose stack traces
+strip = true        # Automatically strips symbols (replaces the manual 'strip' command)

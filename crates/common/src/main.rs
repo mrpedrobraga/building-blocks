@@ -1,4 +1,4 @@
-use building_blocks::{
+use building_blocks_common::{
     client::{app::Application, Client},
     resources::universe::Universe,
     server::{ClientInfo, UniverseServer},
