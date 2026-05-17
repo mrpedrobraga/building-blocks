@@ -323,6 +323,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "building-blocks-client"
+version = "0.1.0"
+dependencies = [
+ "building-blocks-common",
+]
+
+[[package]]
 name = "building-blocks-common"
 version = "0.1.0"
 dependencies = [
@@ -343,6 +350,13 @@ dependencies = [
  "tracing-subscriber",
  "wgpu",
  "winit",
+]
+
+[[package]]
+name = "building-blocks-server"
+version = "0.1.0"
+dependencies = [
+ "building-blocks-common",
 ]
 
 [[package]]

@@ -1,0 +1,8 @@
+[package]
+name = "building-blocks-client"
+publish = false
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+building-blocks-common = { path = "../common" }

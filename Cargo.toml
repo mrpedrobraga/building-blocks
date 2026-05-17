@@ -2,6 +2,8 @@
 resolver = "3"
 members = [
     "crates/common",
+    "crates/server",
+    "crates/client"
 ]
 
 [profile.release]
