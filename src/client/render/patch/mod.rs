@@ -218,7 +218,7 @@ fn camera_orbit(_block_group_size: Vec3, _time: f32) -> Camera {
     //     vec3(0.0, 0.0, 10.0,),
     //     Quat::default(),
     //     CameraProjection::Perspective {
-    //         vertical_fov_radians: 60.0_f32.to_radians(),
+    //         vertical_fov_radians: 74.0_f32.to_radians(),
     //         z_near_clipping_plane: 0.1,
     //         z_far_clipping_plane: 10000.0,
     //     },
@@ -339,7 +339,13 @@ impl BlockGroupRenderState {
     }
 
     pub fn example(gpu: &Gpu, _material: u32) -> Self {
+        // TODO: Preallocate more space.
         let block_group_size = UVec3::new(400, 400, 21);
+        let block_appearance_data = example_scene_1();
+        //let block_group_size = UVec3::new(20, 20, 21);
+        //let block_appearance_data = example_scene_2(block_group_size);
+
+
         //let block_group_half_size = block_group_size.div(UVec3::new(2, 2, 2)).as_vec3();
         let transform = Mat4::from_translation(block_group_size.as_vec3() * vec3(-0.5, -0.5, 0.0));
         let uniforms = BlockGroupUniforms {
@@ -355,9 +361,6 @@ impl BlockGroupRenderState {
                 contents: bytemuck::cast_slice(&[uniforms]),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
-        // TODO: Preallocate more space.
-        let block_appearance_data = example_scene_1(block_group_size);
-        //let block_appearance_data = example_scene_2(block_group_size);
 
         let block_appearance_data_gpu =
             gpu.device
@@ -394,7 +397,8 @@ impl BlockGroupRenderState {
     }
 }
 
-fn example_scene_1(block_group_size: UVec3) -> Vec<BlockAppearanceEntry> {
+fn example_scene_1() -> Vec<BlockAppearanceEntry> {
+    let block_group_size = UVec3::new(400, 400, 21);
     (0..block_group_size.z)
         .flat_map(|z| (0..block_group_size.y).map(move |y| (z, y)))
         .flat_map(move |(z, y)| (0..block_group_size.x).map(move |x| (z, y, x)))
@@ -413,7 +417,9 @@ fn example_scene_1(block_group_size: UVec3) -> Vec<BlockAppearanceEntry> {
         .collect::<Vec<_>>()
 }
 
-fn example_scene_2(block_group_size: UVec3) -> Vec<BlockAppearanceEntry> {
+#[allow(unused)]
+fn example_scene_2() -> Vec<BlockAppearanceEntry> {
+    let block_group_size = UVec3::new(40, 40, 20);
     let mut block_appearance_data = vec![
         BlockAppearanceEntry { idx_in_palette: 0 };
         (block_group_size.x * block_group_size.y * block_group_size.z)

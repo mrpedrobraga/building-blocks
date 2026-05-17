@@ -120,6 +120,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Visualize the triangles.
     //return FragmentOutput(depth, vec4(srgb_to_linear(test_colors[in.triangle_idx % 16]), 1.0));
 
+    let sky_color = vec4(0.9, 0.9, 0.9, 1.0);
+
     let local_camera_position = block_group_uniforms.inv_transform * vec4<f32>(world_uniforms.camera_world_position.xyz, 1.0);
     
     var _ray_unorm = in.local_position.xyz - local_camera_position.xyz;
@@ -136,50 +138,93 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let atlas_size = vec2<f32>(textureDimensions(material_atlas));
     var atlas_uv = (material.atlas_position + dda_primary.hit_uv * material.atlas_size) / atlas_size;
     col = textureSample(material_atlas, material_atlas_s, atlas_uv);
+    //col = vec4(1.0, 1.0, 1.0, 1.0);
+    //col = vec4(srgb_to_linear(test_colors[dda_primary.hit_block_type % 16]), 1.0);
 
     // *Fancy shadows!*
-    let light_direction = normalize(vec3(2.0, 1.0, 1.0));
-    
-    var luminosity: f32;
-    let dda_shadow = dda_traverse(dda_primary.hit_position + light_direction * 0.001, light_direction);
+    let light_direction = normalize(vec3(1.0, 1.0, 2.0));
+    var luminosity: f32 = 1.0;
+    let shadow_ray_origin = dda_primary.hit_position;
+    let dda_shadow = dda_traverse(shadow_ray_origin + light_direction * 0.001, light_direction);
     if (dda_shadow.hit) {
         // If we hit a block, we are in shadow.
         luminosity = 0.0;
     } else {
         luminosity = saturate( dot(dda_primary.hit_normal, light_direction) );
     }    
-    col *= 0.25 + 0.75 * luminosity;
+    col = vec4(col.rgb * (0.25 + 0.75 * luminosity), col.a);
 
-    // Fancy reflected blocks...
-    if (dda_primary.hit_block_type == 2) {
-        let reflected_ray_direction = reflect(ray_direction, dda_primary.hit_normal);
-        let reflected_ray_origin = dda_primary.hit_position;
-        let dda_reflection = dda_traverse(reflected_ray_origin + reflected_ray_direction * 0.001, reflected_ray_direction);
-    
-        var col_reflected = vec4(0.9, 0.9, 0.9, 1.0);
+    // Ambient Occlusion (AO)
+    let ao_strength = 0.8;
+    let black = vec4(0.0, 0.0, 0.0, 1.0);
+    let hit_voxel = dda_primary.hit_voxel;
+    let containing_voxel = hit_voxel + vec3<i32>(dda_primary.hit_normal);
+    let fract_position = dda_primary.hit_position - vec3<f32>(containing_voxel);
+    let fract_quad = fract_position * fract_position;
 
-        if (dda_reflection.hit) {
-            let r_appearance = block_appearance_palette[dda_reflection.hit_block_type - 1];
-            let r_material = r_appearance.material;
-            var r_atlas_uv = (r_material.atlas_position + dda_reflection.hit_uv * r_material.atlas_size) / atlas_size;
-        
-            col_reflected = textureSample(material_atlas, material_atlas_s, r_atlas_uv);
+    let neighbours = array<vec3<i32>, 6>(
+        vec3( 1,  0,  0), vec3(-1,  0,  0),
+        vec3( 0,  1,  0), vec3( 0, -1,  0),
+        vec3( 0,  0,  1), vec3( 0,  0, -1)
+    );
 
-            var r_luminosity: f32;
-            let r_dda_shadow = dda_traverse(dda_reflection.hit_position + light_direction * 0.001, light_direction);
-            if (r_dda_shadow.hit) {
-                // If we hit a block, we are in shadow.
-                r_luminosity = 0.0;
-            } else {
-                r_luminosity = saturate( dot(dda_reflection.hit_normal, light_direction) );
-            }    
-            col_reflected *= 0.25 + 0.75 * r_luminosity;
-        }
-        col = mix(col, col_reflected, 0.7);
+    // In which directions are there blocks to create ao.
+    var occlusion : array<f32, 6>;
+    for (var i = 0; i < 6; i++) {
+        occlusion[i] = f32(get_voxel(containing_voxel + neighbours[i]) != 0);
     }
 
-    //col = vec4(srgb_to_linear(test_colors[dda_primary.hit_block_type % 16]), 1.0);
+    // Computing ao on each axis based on how close the hit point
+    // is to either the far or near plane in that axis.
+    // We mask it with `occlusion`.
+    let ao = array<f32, 3>(
+        (1.0 - occlusion[0] * ao_curve(ao_strength * fract_quad.x)) *
+            (1.0 - occlusion[1] * ao_curve(ao_strength * (1.0 - fract_quad.x))),
+        (1.0 - occlusion[2] * ao_curve(ao_strength * fract_quad.y)) *
+            (1.0 - occlusion[3] * ao_curve(ao_strength * (1.0 - fract_quad.y))),
+        (1.0 - occlusion[4] * ao_curve(ao_strength * fract_quad.z)) *
+            (1.0 - occlusion[5] * ao_curve(ao_strength * (1.0 - fract_quad.z)))
+    );
+
+    // Combine the ao, skipping the axis that corresponds to the plane we hit.
+    // After all, we are always close to the plane we hit, and we dont want all blocks to be black.
+    var ao_merged = 1.0;
+    for (var i: u32 = 0; i < 3; i++) {
+        ao_merged *= select(ao[i], 1.0, i == dda_primary.hit_plane);
+    }
+
+    col = mix(black, col, ao_merged);
+
+    // Fancy reflected blocks...
+    // TODO: Extract traversal+texturing+lighting into another function so it can be called recursively/iteratively.
     
+    // if (dda_primary.hit_block_type > 0) {
+    //     let reflected_ray_direction = reflect(ray_direction, dda_primary.hit_normal);
+    //     let reflected_ray_origin = dda_primary.hit_position;
+    //     let dda_reflection = dda_traverse(reflected_ray_origin + reflected_ray_direction * 0.001, reflected_ray_direction);
+    
+    //     var col_reflected = sky_color;
+
+    //     if (dda_reflection.hit) {
+    //         let r_appearance = block_appearance_palette[dda_reflection.hit_block_type - 1];
+    //         let r_material = r_appearance.material;
+    //         var r_atlas_uv = (r_material.atlas_position + dda_reflection.hit_uv * r_material.atlas_size) / atlas_size;
+        
+    //         col_reflected = textureSample(material_atlas, material_atlas_s, r_atlas_uv);
+
+    //         var r_luminosity: f32;
+    //         let r_dda_shadow = dda_traverse(dda_reflection.hit_position + light_direction * 0.001, light_direction);
+    //         if (r_dda_shadow.hit) {
+    //             // If we hit a block, we are in shadow.
+    //             r_luminosity = 0.0;
+    //         } else {
+    //             r_luminosity = saturate( dot(dda_reflection.hit_normal, light_direction) );
+    //         }    
+    //         col_reflected *= 0.25 + 0.75 * r_luminosity;
+    //     }
+    //     col = mix(col, col_reflected, 0.1);
+    // }
+
     /* Depth Calculation */    
     let ray_hit_world_pos = block_group_uniforms.transform * vec4(dda_primary.hit_position, 1.0);
     let ray_hit_clip_pos = world_uniforms.view_matrix * ray_hit_world_pos;
@@ -187,15 +232,17 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     // Simple fog :-)
     let distance = distance(local_camera_position.xyz, ray_origin) + dda_primary.hit_distance;
-    col = mix(col, vec4(0.9, 0.9, 0.9, 1.0), saturate(distance * distance * 0.00001));
+    col = mix(col, sky_color, saturate(distance * distance * 0.00001));
 
     return FragmentOutput(depth, col);
 }
 
 struct TraversalOutput {
     hit: bool,
+    hit_plane: u32,
     hit_distance: f32,
     hit_position: vec3<f32>,
+    hit_voxel: vec3<i32>,
     hit_normal: vec3<f32>,
     hit_uv: vec2<f32>,
     hit_block_type: u32,
@@ -233,8 +280,7 @@ fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
 
     var current_voxel: vec3<i32> = vec3<i32>(start);
     var current_voxel_block_type: u32;
-    var current_voxel_idx_in_buffer: u32;
-    var last_intersection_plane = 0; // 0 = YZ; 1 = XZ; 2 = XY;
+    var last_intersection_plane: u32 = 0; // 0 = YZ; 1 = XZ; 2 = XY;
 
     var dist_to_volume_min = abs(start);
     var dist_to_volume_max = abs(vec3<f32>(block_group_uniforms.size) - start);
@@ -253,11 +299,10 @@ fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
     let max_step_count = i32(block_group_uniforms.size.x + block_group_uniforms.size.y + block_group_uniforms.size.z);
     for(; raymarching_iteration_idx < max_step_count; raymarching_iteration_idx++) {
         if(!aabb_contains(current_voxel, vec3(0), vec3<i32>(block_group_uniforms.size))) {
-            return TraversalOutput(false, 0.0, vec3(0.0), vec3(0.0), vec2(0.0), 0);
+            return TraversalOutput(false, last_intersection_plane, 0.0, vec3(0.0), vec3(0), vec3(0.0), vec2(0.0), 0);
         }
 
-        current_voxel_idx_in_buffer = voxel_position_encode(vec3<u32>(current_voxel));
-        current_voxel_block_type = block_group_data[current_voxel_idx_in_buffer];
+        current_voxel_block_type = get_voxel(current_voxel);
 
         // TODO: Use a more sophisticated way of detecting a hit.
         if (current_voxel_block_type != 0 /* 0 = AIR */) {
@@ -324,6 +369,8 @@ fn dda_traverse(start: vec3<f32>, direction: vec3<f32>) -> TraversalOutput {
     result.hit_normal = normal;
     result.hit_uv = uv;
     result.hit_block_type = current_voxel_block_type;
+    result.hit_plane = last_intersection_plane;
+    result.hit_voxel = current_voxel;
     return result;
 }
 
@@ -352,6 +399,12 @@ fn voxel_position_encode(local_position: vec3<u32>) -> u32 {
         local_position.z * block_group_uniforms.size.x * block_group_uniforms.size.y;
 }
 
+fn get_voxel(local_position: vec3<i32>) -> u32 {
+    let current_voxel_idx_in_buffer = voxel_position_encode(vec3<u32>(local_position));
+    if current_voxel_idx_in_buffer > arrayLength(&block_group_data) { return 0; };
+    return block_group_data[current_voxel_idx_in_buffer];
+}
+
 /// Returns whether a point is inside an AABB (end-exclusive).
 fn aabb_contains(
     point: vec3<i32>,
@@ -378,6 +431,10 @@ fn tex_missing_texture(uv: vec2<f32>) -> vec4<f32> {
     } else {
         return vec4(1.0, 0.0, 1.0, 1.0);
     }
+}
+
+fn ao_curve(x: f32) -> f32 {
+    return 0.5*x*x;
 }
 
 /// Converts a colour from SRGB to linear.
